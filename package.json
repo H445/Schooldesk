@@ -11,6 +11,7 @@
     "dev": "vinext dev",
     "build": "node scripts/build-static.mjs",
     "desktop": "electron electron/main.cjs",
+    "desktop:test": "npm run build && npm run desktop",
     "desktop:package": "npm run desktop:prepare && electron-builder",
     "desktop:prepare": "npm run build && node -e \"require('node:fs').mkdirSync('release',{recursive:true})\"",
     "desktop:release": "npm run desktop:package -- --publish always",

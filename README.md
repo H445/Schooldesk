@@ -16,6 +16,10 @@ Run `npm run desktop:package` to build the installer for the current operating s
 
 The first launch includes the semester schedule provided for this workspace. Add and edit classes, assignments, notes, and calendar meetings directly on the device. Removing a class keeps its assignments and notes under General.
 
+### IDE testing
+
+Run `npm install` once, then use `npm run desktop:test` to rebuild the offline renderer and open the Electron app. Rider can use the checked-in `Schooldesk Desktop` run configuration under `.run/`. In Visual Studio, open the folder with **File → Open → Folder**, choose the `Schooldesk Desktop (build + run)` debug target, and press **F5**. The **Build** menu also includes `Schooldesk: Build offline renderer` and `Schooldesk: Package desktop app` from `tasks.vs.json`.
+
 ## Checks
 
 - `npx tsc --noEmit`

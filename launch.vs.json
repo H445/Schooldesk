@@ -1,0 +1,14 @@
+{
+  "version": "0.2.1",
+  "defaults": {},
+  "configurations": [
+    {
+      "type": "default",
+      "project": "${env.COMSPEC}",
+      "projectTarget": "",
+      "name": "Schooldesk Desktop (build + run)",
+      "args": ["/d", "/s", "/c", "npm run desktop:test"],
+      "currentDir": "${workspaceRoot}"
+    }
+  ]
+}

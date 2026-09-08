@@ -1,0 +1,27 @@
+{
+  "version": "0.2.1",
+  "tasks": [
+    {
+      "taskName": "Schooldesk: Build offline renderer",
+      "appliesTo": "*",
+      "type": "launch",
+      "contextType": "build",
+      "command": "${env.COMSPEC}",
+      "args": ["/d", "/s", "/c", "npm run build"],
+      "envVars": {
+        "VSCMD_START_DIR": "\"${workspaceRoot}\""
+      }
+    },
+    {
+      "taskName": "Schooldesk: Package desktop app",
+      "appliesTo": "*",
+      "type": "launch",
+      "contextType": "build",
+      "command": "${env.COMSPEC}",
+      "args": ["/d", "/s", "/c", "npm run desktop:package"],
+      "envVars": {
+        "VSCMD_START_DIR": "\"${workspaceRoot}\""
+      }
+    }
+  ]
+}
