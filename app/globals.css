@@ -1868,3 +1868,240 @@ select:focus-visible {
     animation: none !important;
   }
 }
+
+/* Readability pass: an intentional dark workspace with larger type. */
+:root {
+  --background: #11131a;
+  --foreground: #f2f1f7;
+  --primary: #9a7bea;
+  --color-secondary: #272431;
+  --color-secondary-foreground: #eee9fb;
+  --color-muted: #252633;
+  --color-muted-foreground: #bcb8ca;
+  --color-border: #363647;
+  --color-input: #414154;
+  --color-popover: #1d1e29;
+  --color-popover-foreground: #f2f1f7;
+  color-scheme: dark;
+}
+
+body {
+  background: #11131a;
+  color: #f2f1f7;
+  font-size: 16px;
+}
+
+.main-shell,
+.topbar,
+.stat-card,
+.panel,
+.class-card,
+.note-card,
+.empty-state,
+.calendar-day,
+.school-dialog {
+  background: #1b1d27;
+  color: #f2f1f7;
+}
+
+.topbar {
+  border-color: #343544;
+  background: #171923;
+}
+.breadcrumbs,
+.date-line,
+.page-heading p,
+.secondary-text,
+.stat-card p,
+.section-heading p,
+.course-label,
+.class-card > p,
+.class-card-bottom,
+.assignment-table th,
+.priority,
+.progress-panel > p,
+.progress-legend span,
+.note-meta,
+.note-card > p,
+.workspace-footer,
+.text-link,
+.all-notes,
+.panel-add,
+.mini-empty,
+.empty-state p {
+  color: #bcb8ca;
+}
+.breadcrumbs strong,
+.section-heading h2,
+.assignment-name strong,
+.class-card h3,
+.note-card h3,
+.stat-label,
+.calendar-heading h2 {
+  color: #f2f1f7;
+}
+.assignment-table th,
+.weekday {
+  background: #232531;
+  border-color: #353647;
+  color: #bcb8ca;
+}
+.assignment-table td,
+.calendar-day {
+  border-color: #303140;
+}
+.assignment-table tr:hover,
+.note-preview:hover {
+  background: #242633;
+}
+.note-preview {
+  border-color: #303140;
+  color: #f2f1f7;
+}
+.stat-card,
+.panel,
+.class-card,
+.note-card,
+.calendar-panel {
+  border-color: #37384a;
+}
+.search-box input {
+  color: #f2f1f7;
+  font-size: 16px;
+}
+.search-box input::placeholder {
+  color: #aaa6b9;
+}
+.stat-label,
+.assignment-table th,
+.course-code,
+.calendar-item,
+.status,
+.priority,
+.workspace-footer,
+.form-actions,
+.editor-form label,
+.editor-form input,
+.editor-form textarea,
+.editor-form select,
+select {
+  font-size: 15px;
+}
+.stat-value {
+  font-size: 34px;
+}
+.stat-value > span {
+  font-size: 14px;
+}
+.assignment-name strong {
+  font-size: 16px;
+}
+.course-label {
+  font-size: 14px;
+}
+.class-card h3,
+.note-card h3 {
+  font-size: 18px;
+}
+.class-card > p,
+.class-card-bottom,
+.note-card > p {
+  font-size: 15px;
+}
+.section-heading h2 {
+  font-size: 18px;
+}
+.section-heading p,
+.example-banner,
+.date-line {
+  font-size: 14px;
+}
+.status-select {
+  font-size: 14px;
+}
+.empty-state h3 {
+  color: #f2f1f7;
+  font-size: 20px;
+}
+.editor-form input,
+.editor-form textarea,
+.editor-form select,
+select {
+  background: #252734;
+  color: #f2f1f7;
+  border-color: #4a4b60;
+}
+.editor-form input::placeholder,
+.editor-form textarea::placeholder {
+  color: #aaa6b9;
+}
+.calendar-day.outside-month {
+  background: #161720;
+  color: #817d90;
+}
+.calendar-item {
+  color: #eeeaf6;
+}
+.example-banner {
+  background: #29233c;
+  border-color: #514070;
+  color: #ddd1f5;
+}
+.progress-panel {
+  background: #211d2e;
+  border-color: #4a3d63;
+}
+.progress-ring > div {
+  background: #211d2e;
+}
+.notes-panel .note-icon,
+.note-card .note-icon {
+  background: #2c2540;
+  border-color: #594872;
+  color: #d2baf5;
+}
+.kanban-column {
+  background: #20212d;
+  border-color: #38394b;
+}
+.kanban-card {
+  background: #1b1d27;
+  border-color: #414255;
+}
+.check-button {
+  background: #252734;
+  border-color: #68677c;
+}
+.view-toggle {
+  background: #252633;
+  border-color: #424356;
+}
+.view-toggle button.selected {
+  background: #3a3150;
+  color: #efe8ff;
+}
+.school-dialog {
+  border: 1px solid #44465a;
+}
+.school-dialog [data-slot='dialog-description'] {
+  color: #bcb8ca;
+  font-size: 15px;
+}
+.form-error,
+.error-banner {
+  background: #392127;
+  border-color: #78414d;
+  color: #ffd3da;
+}
+
+@media (max-width: 760px) {
+  body {
+    font-size: 16px;
+  }
+  .nav-link {
+    font-size: 16px;
+  }
+  .page-heading p {
+    font-size: 15px;
+  }
+}
