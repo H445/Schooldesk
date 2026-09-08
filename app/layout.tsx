@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 import './globals.css';
 export const metadata: Metadata = {
-  title: 'Schooldesk — Your school workspace',
+  title: 'Schooldesk — Offline school workspace',
   description:
-    'Organize your classes, keep your notes together, and stay on top of every assignment.',
+    'Organize classes, notes, assignments, and schedules entirely on your device.',
 };
 export default function RootLayout({
   children,

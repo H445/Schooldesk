@@ -44,7 +44,7 @@ import {
 } from '@/components/ui/dialog';
 import {
   localDate,
-  makeExamples,
+  makeOfflineWorkspace,
   meetingsOn,
   schedulesFor,
   type ClassSchedule,
@@ -56,6 +56,11 @@ import {
   type SchoolData,
 } from '@/lib/school';
 import type { Mutation } from '@/lib/actions';
+import {
+  loadLocalWorkspace,
+  saveLocalMutation,
+  type LocalWorkspace,
+} from '@/lib/local-workspace';
 
 type View = 'Overview' | 'Classes' | 'Assignments' | 'Notes' | 'Calendar';
 type Editor = {
@@ -85,8 +90,11 @@ const dateLabel = (date: string) =>
   });
 
 export default function SchoolDashboard() {
-  const [data, setData] = useState<SchoolData>(makeExamples);
-  const snapshot = useRef({ data, revision: 0 });
+  const [data, setData] = useState<SchoolData>(makeOfflineWorkspace);
+  const snapshot = useRef<LocalWorkspace>({
+    data: makeOfflineWorkspace(),
+    revision: 0,
+  });
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
@@ -118,13 +126,7 @@ export default function SchoolDashboard() {
   const reload = useCallback(async () => {
     setError('');
     try {
-      const r = await fetch('/api/workspace', { cache: 'no-store' });
-      const result = (await r.json()) as {
-        data: SchoolData;
-        revision: number;
-        error?: string;
-      };
-      if (!r.ok) throw new Error(result.error);
+      const result = loadLocalWorkspace();
       accept(result);
       setLoaded(true);
     } catch (e) {
@@ -148,21 +150,8 @@ export default function SchoolDashboard() {
       setBusy(true);
       setError('');
       try {
-        const r = await fetch('/api/workspace', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            revision: snapshot.current.revision,
-            mutation,
-          }),
-        });
-        const result = (await r.json()) as {
-          data: SchoolData;
-          revision: number;
-          error?: string;
-        };
-        if (result.data) accept(result);
-        if (!r.ok) throw new Error(result.error || 'Could not save changes.');
+        const result = saveLocalMutation(snapshot.current, mutation);
+        accept(result);
         setToast(message);
         return result;
       } catch (e) {
@@ -533,7 +522,15 @@ export default function SchoolDashboard() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <a className="brand" href="/" aria-label="Schooldesk home">
+        <a
+          className="brand"
+          href="/"
+          aria-label="Schooldesk home"
+          onClick={(event) => {
+            event.preventDefault();
+            navigate('Overview');
+          }}
+        >
           <span className="brand-symbol">
             <GraduationCap size={25} />
           </span>
@@ -1307,10 +1304,10 @@ export default function SchoolDashboard() {
                 style={{ background: loaded ? '#63977b' : '#aaa' }}
               />
               {busy
-                ? 'Saving…'
+                ? 'Saving locally…'
                 : loaded
-                  ? 'Saved'
-                  : 'Connecting to your workspace…'}
+                  ? 'Saved on this device'
+                  : 'Loading locally…'}
             </span>
           </footer>
         </main>

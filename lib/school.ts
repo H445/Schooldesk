@@ -241,3 +241,72 @@ export function makeExamples(): SchoolData {
     ],
   };
 }
+
+/** The first-run workspace for the offline desktop app. */
+export function makeOfflineWorkspace(): SchoolData {
+  const meeting = (
+    day: number,
+    startTime: string,
+    endTime: string,
+    room: string,
+  ): ClassSchedule => ({
+    weekdays: [day],
+    startTime,
+    endTime,
+    startDate: '2026-09-08',
+    endDate: '2026-12-18',
+    location: `Main Building · ${room}`,
+  });
+  const course = (
+    id: string,
+    code: string,
+    name: string,
+    color: string,
+    calendarSchedules: ClassSchedule[],
+    teacher = '',
+  ): Course => ({
+    id,
+    name,
+    code,
+    teacher,
+    schedule: '',
+    calendarSchedule: calendarSchedules[0] ?? null,
+    calendarSchedules,
+    color,
+  });
+  return {
+    classes: [
+      course('mad-103-002', 'MAD 103 - 002', 'MAD 103 - 002', '#518dd1', [
+        meeting(1, '11:00', '14:00', 'A2134'),
+      ]),
+      course('mit-313g-002', 'MIT 313G - 002', 'MIT 313G - 002', '#d79446', [
+        meeting(1, '15:00', '18:00', 'Location TBA'),
+      ]),
+      course('mth-100a-001', 'MTH 100A - 001', 'MTH 100A - 001', '#54957d', [
+        meeting(2, '11:00', '12:00', 'A2612'),
+        meeting(5, '12:00', '14:00', 'A2612'),
+      ]),
+      course(
+        'web-110-002',
+        'WEB 110 - 002',
+        'HTML + CSS',
+        '#9170df',
+        [
+          meeting(2, '15:00', '17:00', 'A2134'),
+          meeting(5, '10:00', '12:00', 'A2134'),
+        ],
+        'Chad Woodward',
+      ),
+      course('mit-146-002', 'MIT 146 - 002', 'MIT 146 - 002', '#d57790', [
+        meeting(3, '08:00', '10:00', 'A3302'),
+        meeting(3, '11:00', '14:00', 'A0336'),
+      ]),
+      course('mad-107-002', 'MAD 107 - 002', 'MAD 107 - 002', '#737d91', [
+        meeting(3, '15:00', '17:00', 'A0341'),
+        meeting(4, '12:00', '14:00', 'A0341'),
+      ]),
+    ],
+    assignments: [],
+    notes: [],
+  };
+}
