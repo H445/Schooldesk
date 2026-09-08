@@ -45,7 +45,9 @@ import {
 import {
   localDate,
   makeExamples,
-  meetsOn,
+  meetingsOn,
+  schedulesFor,
+  type ClassSchedule,
   classScheduleLabel,
   weekdays,
   type Course,
@@ -475,7 +477,7 @@ export default function SchoolDashboard() {
       <div className="class-grid">
         {items.map((c) => (
           <ClassCard
-            key={c.id}
+            key={`${c.id}-${c.calendarSchedule?.startTime || 'class'}`}
             course={c}
             assignments={data.assignments}
             onClick={() => navigate('Classes', c.id)}
@@ -1169,36 +1171,43 @@ export default function SchoolDashboard() {
                         >
                           {date.getDate()}
                         </button>
-                        {data.classes
-                          .filter(
+                        {meetingsOn(
+                          data.classes.filter(
                             (c) =>
                               classMatches(c.id) &&
-                              matches(c.name, c.code, c.schedule) &&
-                              meetsOn(c, key),
-                          )
-                          .sort((a, b) =>
-                            a.calendarSchedule!.startTime.localeCompare(
-                              b.calendarSchedule!.startTime,
-                            ),
-                          )
-                          .map((c) => (
-                            <button
-                              key={c.id}
-                              className="calendar-item calendar-meeting"
-                              style={
-                                { '--course-color': c.color } as CSSProperties
-                              }
-                              onClick={() => openEditor('classes', c)}
-                              title={`${c.name} · ${c.calendarSchedule!.startTime}–${c.calendarSchedule!.endTime}`}
-                            >
-                              <span className="meeting-time">
-                                <BookOpen size={13} />
-                                {c.calendarSchedule!.startTime}–
-                                {c.calendarSchedule!.endTime}
-                              </span>
-                              {c.code || c.name}
-                            </button>
-                          ))}
+                              matches(c.name, c.code, c.schedule),
+                          ),
+                          key,
+                        ).map((c) => (
+                          <button
+                            key={`${c.id}-${c.calendarSchedule?.startTime || 'class'}`}
+                            className="calendar-item calendar-meeting"
+                            style={
+                              { '--course-color': c.color } as CSSProperties
+                            }
+                            onClick={() =>
+                              openEditor(
+                                'classes',
+                                data.classes.find(
+                                  (original) => original.id === c.id,
+                                ) || c,
+                              )
+                            }
+                            title={`${c.name} · ${c.calendarSchedule!.startTime}–${c.calendarSchedule!.endTime}`}
+                          >
+                            <span className="meeting-time">
+                              <BookOpen size={13} />
+                              {c.calendarSchedule!.startTime}–
+                              {c.calendarSchedule!.endTime}
+                            </span>
+                            {c.code || c.name}
+                            {c.calendarSchedule?.location && (
+                              <small className="meeting-location">
+                                {c.calendarSchedule.location}
+                              </small>
+                            )}
+                          </button>
+                        ))}
                         {items.slice(0, 3).map((a) => (
                           <button
                             className={`calendar-item ${a.status === 'Done' ? 'calendar-done' : ''}`}
@@ -1251,34 +1260,40 @@ export default function SchoolDashboard() {
                     </button>
                   </div>
                   <div className="day-meetings">
-                    {data.classes
-                      .filter(
+                    {meetingsOn(
+                      data.classes.filter(
                         (c) =>
                           classMatches(c.id) &&
-                          matches(c.name, c.code, c.schedule) &&
-                          meetsOn(c, selectedDay),
-                      )
-                      .sort((a, b) =>
-                        a.calendarSchedule!.startTime.localeCompare(
-                          b.calendarSchedule!.startTime,
-                        ),
-                      )
-                      .map((c) => (
-                        <button
-                          key={c.id}
-                          className="calendar-item"
-                          style={{ '--course-color': c.color } as CSSProperties}
-                          onClick={() => openEditor('classes', c)}
-                        >
-                          <BookOpen size={16} />
-                          <strong>{c.name}</strong>
+                          matches(c.name, c.code, c.schedule),
+                      ),
+                      selectedDay,
+                    ).map((c) => (
+                      <button
+                        key={`${c.id}-${c.calendarSchedule?.startTime || 'class'}`}
+                        className="calendar-item"
+                        style={{ '--course-color': c.color } as CSSProperties}
+                        onClick={() =>
+                          openEditor(
+                            'classes',
+                            data.classes.find(
+                              (original) => original.id === c.id,
+                            ) || c,
+                          )
+                        }
+                      >
+                        <BookOpen size={16} />
+                        <strong>{c.name}</strong>
+                        <span>
+                          {c.calendarSchedule!.startTime}–
+                          {c.calendarSchedule!.endTime}
+                        </span>
+                        {(c.calendarSchedule?.location || c.schedule) && (
                           <span>
-                            {c.calendarSchedule!.startTime}–
-                            {c.calendarSchedule!.endTime}
+                            {c.calendarSchedule?.location || c.schedule}
                           </span>
-                          {c.schedule && <span>{c.schedule}</span>}
-                        </button>
-                      ))}
+                        )}
+                      </button>
+                    ))}
                   </div>
                   {table(assignments.filter((a) => a.dueDate === selectedDay))}
                 </div>
@@ -1512,7 +1527,22 @@ function EditorForm({
 }) {
   const item = editor.item as Partial<Course & Assignment & Note> | undefined;
   const [color, setColor] = useState(item?.color || colors[0]);
-  const [onCalendar, setOnCalendar] = useState(!!item?.calendarSchedule);
+  const initialMeetings = schedulesFor(item || {});
+  const [onCalendar, setOnCalendar] = useState(initialMeetings.length > 0);
+  const [meetingRows, setMeetingRows] = useState<ClassSchedule[]>(
+    initialMeetings.length
+      ? initialMeetings
+      : [
+          {
+            weekdays: [],
+            startTime: '09:00',
+            endTime: '10:00',
+            startDate: localDate(),
+            endDate: '',
+            location: '',
+          },
+        ],
+  );
   const submit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
@@ -1523,15 +1553,7 @@ function EditorForm({
       ...(editor.kind === 'classes'
         ? {
             color,
-            calendarSchedule: onCalendar
-              ? {
-                  weekdays: form.getAll('weekday').map(Number),
-                  startTime: form.get('startTime'),
-                  endTime: form.get('endTime'),
-                  startDate: form.get('startDate'),
-                  endDate: form.get('endDate'),
-                }
-              : null,
+            calendarSchedules: onCalendar ? meetingRows : [],
           }
         : {}),
     }).catch(() => {});
@@ -1590,73 +1612,49 @@ function EditorForm({
               Show recurring classes on calendar
             </label>
             {onCalendar && (
-              <div className="schedule-fields">
-                <p className="secondary-text">
-                  Repeats weekly between the dates below. Times stay in your
-                  class’s local time.
-                </p>
-                <fieldset className="weekday-picker">
-                  <legend>Meeting days</legend>
-                  <div>
-                    {weekdays.map((day, index) => (
-                      <label key={day}>
-                        <input
-                          type="checkbox"
-                          name="weekday"
-                          value={index}
-                          defaultChecked={item?.calendarSchedule?.weekdays.includes(
-                            index,
-                          )}
-                        />
-                        <span>{day}</span>
-                      </label>
-                    ))}
+              <div className="meeting-editor-list">
+                {meetingRows.map((meeting, index) => (
+                  <div className="schedule-fields" key={index}>
+                    <div className="section-heading">
+                      <strong>Meeting {index + 1}</strong>
+                      {meetingRows.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() =>
+                            setMeetingRows((rows) =>
+                              rows.filter((_, i) => i !== index),
+                            )
+                          }
+                        >
+                          Remove
+                        </Button>
+                      )}
+                    </div>
+                    <MeetingFields
+                      meeting={meeting}
+                      onChange={(next) =>
+                        setMeetingRows((rows) =>
+                          rows.map((row, i) => (i === index ? next : row)),
+                        )
+                      }
+                    />
                   </div>
-                </fieldset>
-                <div className="form-row">
-                  <label>
-                    Start time
-                    <Input
-                      type="time"
-                      name="startTime"
-                      required
-                      defaultValue={
-                        item?.calendarSchedule?.startTime || '09:00'
-                      }
-                    />
-                  </label>
-                  <label>
-                    End time
-                    <Input
-                      type="time"
-                      name="endTime"
-                      required
-                      defaultValue={item?.calendarSchedule?.endTime || '10:00'}
-                    />
-                  </label>
-                </div>
-                <div className="form-row">
-                  <label>
-                    First date
-                    <Input
-                      type="date"
-                      name="startDate"
-                      required
-                      defaultValue={
-                        item?.calendarSchedule?.startDate || localDate()
-                      }
-                    />
-                  </label>
-                  <label>
-                    Last date
-                    <Input
-                      type="date"
-                      name="endDate"
-                      required
-                      defaultValue={item?.calendarSchedule?.endDate}
-                    />
-                  </label>
-                </div>
+                ))}
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={meetingRows.length >= 20}
+                  onClick={() =>
+                    setMeetingRows((rows) => [
+                      ...rows,
+                      { ...rows[0], weekdays: [], location: '' },
+                    ])
+                  }
+                >
+                  <Plus size={16} />
+                  Add meeting
+                </Button>
               </div>
             )}
             <div>
@@ -1803,5 +1801,88 @@ function EditorForm({
         </Button>
       </div>
     </form>
+  );
+}
+
+function MeetingFields({
+  meeting: m,
+  onChange,
+}: {
+  meeting: ClassSchedule;
+  onChange: (next: ClassSchedule) => void;
+}) {
+  return (
+    <>
+      <fieldset className="weekday-picker">
+        <legend>Meeting days</legend>
+        <div>
+          {weekdays.map((day, index) => (
+            <label key={day}>
+              <input
+                type="checkbox"
+                checked={m.weekdays.includes(index)}
+                onChange={(e) =>
+                  onChange({
+                    ...m,
+                    weekdays: e.target.checked
+                      ? [...m.weekdays, index].sort()
+                      : m.weekdays.filter((d) => d !== index),
+                  })
+                }
+              />
+              <span>{day}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <div className="form-row">
+        <label>
+          Start time
+          <Input
+            type="time"
+            required
+            value={m.startTime}
+            onChange={(e) => onChange({ ...m, startTime: e.target.value })}
+          />
+        </label>
+        <label>
+          End time
+          <Input
+            type="time"
+            required
+            value={m.endTime}
+            onChange={(e) => onChange({ ...m, endTime: e.target.value })}
+          />
+        </label>
+      </div>
+      <div className="form-row">
+        <label>
+          First date
+          <Input
+            type="date"
+            required
+            value={m.startDate}
+            onChange={(e) => onChange({ ...m, startDate: e.target.value })}
+          />
+        </label>
+        <label>
+          Last date
+          <Input
+            type="date"
+            required
+            value={m.endDate}
+            onChange={(e) => onChange({ ...m, endDate: e.target.value })}
+          />
+        </label>
+      </div>
+      <label>
+        Room / location
+        <Input
+          maxLength={200}
+          value={m.location || ''}
+          onChange={(e) => onChange({ ...m, location: e.target.value })}
+        />
+      </label>
+    </>
   );
 }

@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { applyMutation } from '../lib/actions.ts';
-import { meetsOn, classScheduleLabel } from '../lib/school.ts';
+import {
+  meetsOn,
+  classScheduleLabel,
+  meetingsOn,
+  schedulesFor,
+} from '../lib/school.ts';
 const course = {
   id: 'c',
   name: 'Web Development',
@@ -61,4 +66,35 @@ test('invalid class dates, times and weekdays are rejected', () => {
         calendarSchedule: { ...calendarSchedule, ...change },
       }),
     );
+});
+test('multiple meetings on one weekday retain separate times and rooms', () => {
+  const first = {
+    ...calendarSchedule,
+    weekdays: [3],
+    startTime: '08:00',
+    endTime: '10:00',
+    location: 'A3302',
+  };
+  const second = {
+    ...calendarSchedule,
+    weekdays: [3],
+    startTime: '11:00',
+    endTime: '14:00',
+    location: 'A0336',
+  };
+  let state = save(empty, { ...course, calendarSchedules: [second, first] });
+  const meetings = meetingsOn(state.classes, '2026-09-09');
+  assert.equal(meetings.length, 2);
+  assert.equal(meetings[0].calendarSchedule.location, 'A3302');
+  assert.equal(meetings[1].calendarSchedule.location, 'A0336');
+  state = save(state, { ...course, name: 'Renamed' });
+  assert.equal(schedulesFor(state.classes[0]).length, 2);
+  state = save(state, { ...state.classes[0], calendarSchedules: [] });
+  assert.equal(meetingsOn(state.classes, '2026-09-09').length, 0);
+  assert.throws(() =>
+    save(empty, {
+      ...course,
+      calendarSchedules: [first, { ...second, endTime: '07:00' }],
+    }),
+  );
 });

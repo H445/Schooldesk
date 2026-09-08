@@ -65,17 +65,31 @@ export function applyMutation(current: SchoolData, input: unknown): SchoolData {
     const color = text(r.color, 'color', 7, true);
     if (!/^#[a-f\d]{6}$/i.test(color))
       throw new Error('Choose a valid class color.');
+    const prior = previous as Course | undefined;
+    const rawSchedules =
+      r.calendarSchedules !== undefined
+        ? r.calendarSchedules
+        : r.calendarSchedule !== undefined
+          ? r.calendarSchedule
+            ? [r.calendarSchedule]
+            : []
+          : (prior?.calendarSchedules ??
+            (prior?.calendarSchedule ? [prior.calendarSchedule] : []));
+    if (!Array.isArray(rawSchedules) || rawSchedules.length > 20)
+      throw new Error('A class can have up to 20 meeting schedules.');
+    const calendarSchedules = rawSchedules.map((s) => {
+      const validated = validateSchedule(s);
+      if (!validated) throw new Error('Invalid meeting schedule.');
+      return validated;
+    });
     value = {
       id,
       name: text(r.name, 'class name', 150, true),
       code: text(r.code ?? '', 'class code', 30),
       teacher: text(r.teacher ?? '', 'teacher', 150),
       schedule: text(r.schedule ?? '', 'schedule', 200),
-      calendarSchedule: validateSchedule(
-        r.calendarSchedule === undefined
-          ? (previous as Course | undefined)?.calendarSchedule
-          : r.calendarSchedule,
-      ),
+      calendarSchedule: calendarSchedules[0] ?? null,
+      calendarSchedules,
       color,
       example: false,
     };
@@ -165,5 +179,8 @@ function validateSchedule(input: unknown): Course['calendarSchedule'] {
     endTime,
     startDate,
     endDate,
+    ...(s.location === undefined
+      ? {}
+      : { location: text(s.location, 'meeting location', 200) }),
   };
 }

@@ -2090,6 +2090,15 @@ textarea:focus-visible {
   font-size: 0.875rem;
   color: var(--muted-foreground);
 }
+.meeting-editor-list {
+  display: grid;
+  gap: 16px;
+}
+.meeting-location {
+  display: block;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+}
 .calendar-meeting {
   border-left-style: double;
   border-left-width: 4px;

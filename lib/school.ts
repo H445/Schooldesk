@@ -4,21 +4,45 @@ export type ClassSchedule = {
   endTime: string;
   startDate: string;
   endDate: string;
+  location?: string;
 };
 export const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export function meetsOn(course: Course, date: string) {
-  const s = course.calendarSchedule;
-  return (
-    !!s &&
-    date >= s.startDate &&
-    date <= s.endDate &&
-    s.weekdays.includes(new Date(date + 'T12:00:00').getDay())
+  return schedulesFor(course).some(
+    (s) =>
+      date >= s.startDate &&
+      date <= s.endDate &&
+      s.weekdays.includes(new Date(date + 'T12:00:00').getDay()),
   );
 }
+export function schedulesFor(course: Partial<Course>) {
+  return (
+    course.calendarSchedules ??
+    (course.calendarSchedule ? [course.calendarSchedule] : [])
+  );
+}
+export function meetingsOn(courses: Course[], date: string): Course[] {
+  return courses
+    .flatMap((c) =>
+      schedulesFor(c)
+        .filter((s) => meetsOn({ ...c, calendarSchedules: [s] }, date))
+        .map((s) => ({ ...c, calendarSchedule: s })),
+    )
+    .sort((a, b) =>
+      a.calendarSchedule!.startTime.localeCompare(
+        b.calendarSchedule!.startTime,
+      ),
+    );
+}
 export function classScheduleLabel(course: Course) {
-  const s = course.calendarSchedule;
-  return s
-    ? `${s.weekdays.map((d) => weekdays[d]).join(' & ')} · ${s.startTime}–${s.endTime}`
+  const schedules = schedulesFor(course);
+  return schedules.length
+    ? schedules
+        .map(
+          (s) =>
+            `${s.weekdays.map((d) => weekdays[d]).join(' & ')} · ${s.startTime}–${s.endTime}${s.location ? ' · ' + s.location : ''}`,
+        )
+        .join('; ')
     : course.schedule;
 }
 export type Course = {
@@ -28,6 +52,7 @@ export type Course = {
   teacher: string;
   schedule: string;
   calendarSchedule?: ClassSchedule | null;
+  calendarSchedules?: ClassSchedule[];
   color: string;
   example?: boolean;
 };
