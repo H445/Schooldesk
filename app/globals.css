@@ -2094,6 +2094,47 @@ select {
   color: #ffd3da;
 }
 
+/* Native selects keep their own status colors unless they are reset explicitly. */
+.status-select,
+.status-select.status-to-do,
+.status-select.status-in-progress,
+.status-select.status-done {
+  appearance: auto;
+  border: 1px solid #4a4b60;
+  background: #252734;
+  color: #f2f1f7;
+  border-radius: 6px;
+  padding: 6px 9px;
+  min-height: 34px;
+}
+.status-select.status-to-do {
+  color: #ded4f2;
+}
+.status-select.status-in-progress {
+  color: #f0d5a3;
+}
+.status-select.status-done {
+  color: #b8e0c7;
+}
+.status-select option,
+.editor-form select option,
+select option {
+  background: #252734;
+  color: #f2f1f7;
+}
+.status-to-do:not(select) {
+  color: #ded4f2;
+  background: #302a3d;
+}
+.status-in-progress:not(select) {
+  color: #f0d5a3;
+  background: #3b3125;
+}
+.status-done:not(select) {
+  color: #b8e0c7;
+  background: #26392f;
+}
+
 @media (max-width: 760px) {
   body {
     font-size: 16px;
