@@ -848,7 +848,7 @@ export default function SchoolDashboard() {
                       role="img"
                       aria-label={`${progress}% of assignments complete`}
                       style={{
-                        background: `conic-gradient(#8060dd ${progress}%, #ece7f7 0)`,
+                        background: `conic-gradient(var(--link) ${progress}%, var(--surface-hover) 0)`,
                       }}
                     >
                       <div>
@@ -867,11 +867,11 @@ export default function SchoolDashboard() {
                     </p>
                     <div className="progress-legend">
                       <span>
-                        <i style={{ background: '#8665dc' }} />
+                        <i style={{ background: 'var(--link)' }} />
                         Completed
                       </span>
                       <span>
-                        <i style={{ background: '#e6dff4' }} />
+                        <i style={{ background: 'var(--surface-hover)' }} />
                         Remaining
                       </span>
                     </div>
