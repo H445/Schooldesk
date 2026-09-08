@@ -120,6 +120,7 @@ button:hover {
   overflow-y: auto;
 }
 .brand {
+  margin-bottom: 28px;
   display: flex;
   align-items: center;
   gap: 10px;

@@ -15,7 +15,6 @@ import {
   CalendarDays,
   Check,
   CheckCheck,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -246,7 +245,7 @@ export default function SchoolDashboard() {
     icon: LucideIcon;
     label: string;
     value: number;
-    sub: string;
+
     color: string;
     target: View;
     filter?: string;
@@ -255,7 +254,7 @@ export default function SchoolDashboard() {
       icon: BookOpen,
       label: 'Active classes',
       value: data.classes.length,
-      sub: 'A place for every subject',
+
       color: 'violet',
       target: 'Classes',
     },
@@ -263,7 +262,7 @@ export default function SchoolDashboard() {
       icon: ListTodo,
       label: 'To do',
       value: data.assignments.filter((a) => a.status === 'To do').length,
-      sub: 'Ready when you are',
+
       color: 'blue',
       target: 'Assignments',
       filter: 'To do',
@@ -272,7 +271,7 @@ export default function SchoolDashboard() {
       icon: Target,
       label: 'In progress',
       value: data.assignments.filter((a) => a.status === 'In progress').length,
-      sub: 'Keep the momentum going',
+
       color: 'orange',
       target: 'Assignments',
       filter: 'In progress',
@@ -281,7 +280,7 @@ export default function SchoolDashboard() {
       icon: CheckCheck,
       label: 'Completed',
       value: completed,
-      sub: 'One step closer to your goals',
+
       color: 'green',
       target: 'Assignments',
       filter: 'Done',
@@ -360,18 +359,7 @@ export default function SchoolDashboard() {
     });
     return () => lifecycle.abort();
   }, [loaded, mutate]);
-  const heading =
-    view === 'Overview'
-      ? 'A little more organized.'
-      : activeClass
-        ? activeClass.name
-        : view === 'Classes'
-          ? 'A place for every subject.'
-          : view === 'Assignments'
-            ? 'One task at a time.'
-            : view === 'Notes'
-              ? 'Keep your thoughts together.'
-              : 'See the bigger picture.';
+  const heading = activeClass?.name || view;
   const primaryKind =
     view === 'Classes' && !activeClass
       ? 'classes'
@@ -474,13 +462,11 @@ export default function SchoolDashboard() {
     ) : (
       <Empty
         icon={CheckCheck}
-        title={
-          query ? 'No matching assignments' : 'A clear desk. A fresh start.'
-        }
+        title={query ? 'No matching assignments' : 'No assignments'}
         text={
           query
             ? 'Try another search or filter.'
-            : 'Add an assignment to start planning your next step.'
+            : 'Add an assignment to track it here.'
         }
       />
     );
@@ -499,8 +485,8 @@ export default function SchoolDashboard() {
     ) : (
       <Empty
         icon={BookOpen}
-        title={query ? 'No matching classes' : 'Your semester starts here'}
-        text="Add your first class to give your assignments and notes a home."
+        title={query ? 'No matching classes' : 'No classes'}
+        text="Add a class to get started."
       />
     );
   const noteCards = (items: Note[]) =>
@@ -538,8 +524,8 @@ export default function SchoolDashboard() {
     ) : (
       <Empty
         icon={FileText}
-        title={query ? 'No matching notes' : 'Good ideas deserve a home'}
-        text="Capture a lecture, a question, or that thing you don’t want to forget."
+        title={query ? 'No matching notes' : 'No notes'}
+        text="Create a note using New note."
       />
     );
   return (
@@ -553,14 +539,6 @@ export default function SchoolDashboard() {
             schooldesk<span className="brand-dot">.</span>
           </span>
         </a>
-        <div className="workspace-switch">
-          <span className="workspace-avatar">S</span>
-          <div>
-            <strong>My workspace</strong>
-            <small>Personal workspace</small>
-          </div>
-          <ChevronDown size={15} />
-        </div>
         <div className="nav-label">WORKSPACE</div>
         <nav aria-label="Main navigation">
           {navigation.map(({ icon: Icon, label }) => (
@@ -600,26 +578,8 @@ export default function SchoolDashboard() {
             </button>
           ))}
           {!data.classes.length && (
-            <span className="sidebar-empty">Your classes will live here.</span>
+            <span className="sidebar-empty">No classes</span>
           )}
-        </div>
-        <div className="sidebar-bottom">
-          <div className="small-tip">
-            <Sparkles size={19} />
-            <strong>A little progress, every day.</strong>
-            <p>
-              Big goals start with small steps.
-              <br />
-              You’ve got this.
-            </p>
-          </div>
-          <div className="profile">
-            <span className="profile-avatar">ME</span>
-            <div>
-              <strong>Student workspace</strong>
-              <small>Your space to make progress</small>
-            </div>
-          </div>
         </div>
       </aside>
       <div className="main-shell">
@@ -653,42 +613,24 @@ export default function SchoolDashboard() {
                 <kbd>⌕</kbd>
               )}
             </label>
-            <span className="top-avatar">S</span>
           </div>
         </header>
         <main className="main-content">
           <div className="page-heading">
             <div>
-              <div className="eyebrow">
-                {activeClass
-                  ? activeClass.code || 'YOUR CLASS'
-                  : 'YOUR SCHOOL, ALL TOGETHER'}
-              </div>
-              <h1>
-                {heading}
-                {view === 'Overview' && (
-                  <span className="heading-spark">✳</span>
-                )}
-              </h1>
-              <p>
-                {activeClass
-                  ? [
-                      activeClass.teacher,
-                      classScheduleLabel(activeClass),
-                      activeClass.calendarSchedule ? activeClass.schedule : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' · ') || 'All your work for this class, together.'
-                  : view === 'Overview'
-                    ? 'Let’s make room for your best work.'
-                    : view === 'Classes'
-                      ? 'Your subjects, your notes, your next steps.'
-                      : view === 'Assignments'
-                        ? 'Plan it. Work on it. Check it off.'
-                        : view === 'Notes'
-                          ? 'A home for every lecture, idea, and lightbulb moment.'
-                          : 'Your deadlines, with a little breathing room.'}
-              </p>
+              <h1>{heading}</h1>
+              {activeClass && (
+                <p>
+                  {[
+                    activeClass.code,
+                    activeClass.teacher,
+                    classScheduleLabel(activeClass),
+                    activeClass.calendarSchedule ? activeClass.schedule : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </p>
+              )}
             </div>
             <Button
               aria-label={`New ${kindLabel(primaryKind)}`}
@@ -708,12 +650,9 @@ export default function SchoolDashboard() {
               day: 'numeric',
               year: 'numeric',
             })}
-            <span className="date-line-dot" />
-            {busy
-              ? 'Saving changes…'
-              : loaded
-                ? 'Your semester at a glance'
-                : 'Loading your workspace…'}
+            {(busy || !loaded) && (
+              <span role="status"> · {busy ? 'Saving…' : 'Loading…'}</span>
+            )}
           </div>
           {error && (
             <div role="alert" className="error-banner">
@@ -730,10 +669,7 @@ export default function SchoolDashboard() {
             <div className="example-banner">
               <div>
                 <Sparkles size={16} />
-                <span>
-                  You’re viewing an example workspace. Make it yours by adding
-                  your classes.
-                </span>
+                <span>Example data</span>
               </div>
               <button disabled={!loaded || busy} onClick={removeExamples}>
                 Start fresh <ArrowRight size={15} />
@@ -748,7 +684,7 @@ export default function SchoolDashboard() {
                     icon: Icon,
                     label,
                     value,
-                    sub,
+
                     color,
                     target,
                     filter,
@@ -775,7 +711,6 @@ export default function SchoolDashboard() {
                             : 'assignments'}
                         </span>
                       </strong>
-                      <p>{sub}</p>
                     </button>
                   ),
                 )}
@@ -794,7 +729,6 @@ export default function SchoolDashboard() {
                             }
                           </span>
                         </h2>
-                        <p>A clear view of what’s on your plate.</p>
                       </div>
                       <button
                         className="text-link"
@@ -915,11 +849,7 @@ export default function SchoolDashboard() {
                         <ArrowRight size={14} />
                       </button>
                     ))}
-                    {!notes.length && (
-                      <p className="mini-empty">
-                        Your next good idea belongs here.
-                      </p>
-                    )}
+                    {!notes.length && <p className="mini-empty">No notes</p>}
                     <button
                       className="all-notes"
                       onClick={() => navigate('Notes')}
@@ -927,14 +857,6 @@ export default function SchoolDashboard() {
                       All notes <ArrowRight size={15} />
                     </button>
                   </section>
-                  <div className="quote-card">
-                    <span>“</span>
-                    <p>
-                      You don’t have to be great to start, but you have to start
-                      to be great.
-                    </p>
-                    <small>A LITTLE REMINDER</small>
-                  </div>
                 </aside>
               </div>
             </>
@@ -946,9 +868,6 @@ export default function SchoolDashboard() {
                   All classes{' '}
                   <span className="number-tag">{classes.length}</span>
                 </h2>
-                <span className="secondary-text">
-                  A little structure goes a long way.
-                </span>
               </div>
               {cards(classes)}
             </>
@@ -1375,11 +1294,8 @@ export default function SchoolDashboard() {
               {busy
                 ? 'Saving…'
                 : loaded
-                  ? 'Your workspace is saved.'
+                  ? 'Saved'
                   : 'Connecting to your workspace…'}
-            </span>
-            <span>
-              Made for your next chapter <BookOpen size={14} />
             </span>
           </footer>
         </main>
@@ -1395,13 +1311,6 @@ export default function SchoolDashboard() {
             {editor?.item?.id ? 'Edit' : 'New'}{' '}
             {editor ? kindLabel(editor.kind) : 'item'}
           </DialogTitle>
-          <DialogDescription>
-            {editor?.kind === 'classes'
-              ? 'Give your subject a home.'
-              : editor?.kind === 'notes'
-                ? 'Capture what matters. Save it for later.'
-                : 'A clear next step makes all the difference.'}
-          </DialogDescription>
           {editor && (
             <EditorForm
               key={`${editor.kind}-${editor.item?.id || 'new'}`}
@@ -1464,7 +1373,7 @@ export default function SchoolDashboard() {
                   void mutate(
                     confirm.mutation,
                     confirm.mutation.action === 'clearExamples'
-                      ? 'A fresh start. Make it yours.'
+                      ? 'Examples removed'
                       : 'Item removed',
                   )
                     .then(() => {
@@ -1562,7 +1471,7 @@ function ClassCard({
         <ArrowRight size={16} />
       </div>
       <h3>{c.name}</h3>
-      <p>{c.teacher || 'Your next chapter starts here'}</p>
+      {c.teacher && <p>{c.teacher}</p>}
       {classScheduleLabel(c) && (
         <p className="class-schedule">
           <CalendarDays size={12} />
@@ -1847,7 +1756,7 @@ function EditorForm({
                   className="note-editor"
                   name="content"
                   defaultValue={item?.content}
-                  placeholder="Start writing. This is your space to think…"
+                  placeholder="Write your notes…"
                   maxLength={50000}
                   rows={12}
                 />
