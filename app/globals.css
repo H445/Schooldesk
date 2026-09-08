@@ -687,6 +687,11 @@ h1 {
   font-size: 14px;
   width: 100%;
 }
+.panel-add:hover,
+.panel-add:focus-visible {
+  background: #2a2b39;
+  color: #f2f1f7;
+}
 .panel-add:hover {
   background: #fbfaff;
 }
