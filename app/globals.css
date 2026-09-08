@@ -2044,3 +2044,61 @@ textarea:focus-visible {
   background: #5b427d;
   color: #ffffff;
 }
+.editor-form .schedule-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.editor-form .schedule-toggle input,
+.editor-form .weekday-picker input {
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+  accent-color: var(--primary);
+}
+.schedule-fields {
+  display: grid;
+  gap: 18px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-raised);
+}
+.schedule-fields .secondary-text {
+  display: block;
+}
+.weekday-picker legend {
+  color: var(--foreground);
+  margin-bottom: 10px;
+}
+.weekday-picker > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.editor-form .weekday-picker label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.875rem;
+}
+.meeting-time {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+}
+.calendar-meeting {
+  border-left-style: double;
+  border-left-width: 4px;
+}
+.day-meetings {
+  padding: 0 22px;
+}
+.day-meetings .calendar-item {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}

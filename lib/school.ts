@@ -1,9 +1,33 @@
+export type ClassSchedule = {
+  weekdays: number[];
+  startTime: string;
+  endTime: string;
+  startDate: string;
+  endDate: string;
+};
+export const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+export function meetsOn(course: Course, date: string) {
+  const s = course.calendarSchedule;
+  return (
+    !!s &&
+    date >= s.startDate &&
+    date <= s.endDate &&
+    s.weekdays.includes(new Date(date + 'T12:00:00').getDay())
+  );
+}
+export function classScheduleLabel(course: Course) {
+  const s = course.calendarSchedule;
+  return s
+    ? `${s.weekdays.map((d) => weekdays[d]).join(' & ')} · ${s.startTime}–${s.endTime}`
+    : course.schedule;
+}
 export type Course = {
   id: string;
   name: string;
   code: string;
   teacher: string;
   schedule: string;
+  calendarSchedule?: ClassSchedule | null;
   color: string;
   example?: boolean;
 };

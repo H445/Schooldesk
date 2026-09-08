@@ -71,6 +71,11 @@ export function applyMutation(current: SchoolData, input: unknown): SchoolData {
       code: text(r.code ?? '', 'class code', 30),
       teacher: text(r.teacher ?? '', 'teacher', 150),
       schedule: text(r.schedule ?? '', 'schedule', 200),
+      calendarSchedule: validateSchedule(
+        r.calendarSchedule === undefined
+          ? (previous as Course | undefined)?.calendarSchedule
+          : r.calendarSchedule,
+      ),
       color,
       example: false,
     };
@@ -121,4 +126,44 @@ export function applyMutation(current: SchoolData, input: unknown): SchoolData {
       ? d.notes.map((n) => (n.id === id ? (value as Note) : n))
       : [value as Note, ...d.notes];
   return d;
+}
+
+function validateSchedule(input: unknown): Course['calendarSchedule'] {
+  if (input == null) return null;
+  const s = record(input);
+  if (
+    !Array.isArray(s.weekdays) ||
+    !s.weekdays.length ||
+    s.weekdays.length > 7 ||
+    s.weekdays.some((d) => !Number.isInteger(d) || d < 0 || d > 6)
+  )
+    throw new Error('Select at least one valid weekday.');
+  const startTime = text(s.startTime, 'start time', 5, true);
+  const endTime = text(s.endTime, 'end time', 5, true);
+  if (
+    !/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime) ||
+    !/^([01]\d|2[0-3]):[0-5]\d$/.test(endTime) ||
+    endTime <= startTime
+  )
+    throw new Error('End time must be later than start time on the same day.');
+  const startDate = text(s.startDate, 'first date', 10, true);
+  const endDate = text(s.endDate, 'last date', 10, true);
+  for (const date of [startDate, endDate]) {
+    const parsed = new Date(date + 'T12:00:00Z');
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+      Number.isNaN(parsed.getTime()) ||
+      parsed.toISOString().slice(0, 10) !== date
+    )
+      throw new Error('Choose valid semester dates.');
+  }
+  if (endDate < startDate)
+    throw new Error('Last date must be on or after the first date.');
+  return {
+    weekdays: [...new Set(s.weekdays as number[])].sort(),
+    startTime,
+    endTime,
+    startDate,
+    endDate,
+  };
 }

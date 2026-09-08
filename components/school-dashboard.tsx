@@ -46,6 +46,9 @@ import {
 import {
   localDate,
   makeExamples,
+  meetsOn,
+  classScheduleLabel,
+  weekdays,
   type Course,
   type Assignment,
   type Note,
@@ -669,7 +672,11 @@ export default function SchoolDashboard() {
               </h1>
               <p>
                 {activeClass
-                  ? [activeClass.teacher, activeClass.schedule]
+                  ? [
+                      activeClass.teacher,
+                      classScheduleLabel(activeClass),
+                      activeClass.calendarSchedule ? activeClass.schedule : '',
+                    ]
                       .filter(Boolean)
                       .join(' · ') || 'All your work for this class, together.'
                   : view === 'Overview'
@@ -1236,13 +1243,43 @@ export default function SchoolDashboard() {
                       >
                         <button
                           className="day-number"
-                          aria-label={`Show assignments for ${key}`}
+                          aria-label={`Show classes and assignments for ${key}`}
                           onClick={() =>
                             setSelectedDay(selectedDay === key ? '' : key)
                           }
                         >
                           {date.getDate()}
                         </button>
+                        {data.classes
+                          .filter(
+                            (c) =>
+                              classMatches(c.id) &&
+                              matches(c.name, c.code, c.schedule) &&
+                              meetsOn(c, key),
+                          )
+                          .sort((a, b) =>
+                            a.calendarSchedule!.startTime.localeCompare(
+                              b.calendarSchedule!.startTime,
+                            ),
+                          )
+                          .map((c) => (
+                            <button
+                              key={c.id}
+                              className="calendar-item calendar-meeting"
+                              style={
+                                { '--course-color': c.color } as CSSProperties
+                              }
+                              onClick={() => openEditor('classes', c)}
+                              title={`${c.name} · ${c.calendarSchedule!.startTime}–${c.calendarSchedule!.endTime}`}
+                            >
+                              <span className="meeting-time">
+                                <BookOpen size={13} />
+                                {c.calendarSchedule!.startTime}–
+                                {c.calendarSchedule!.endTime}
+                              </span>
+                              {c.code || c.name}
+                            </button>
+                          ))}
                         {items.slice(0, 3).map((a) => (
                           <button
                             className={`calendar-item ${a.status === 'Done' ? 'calendar-done' : ''}`}
@@ -1293,6 +1330,36 @@ export default function SchoolDashboard() {
                       <Plus size={14} />
                       Add assignment
                     </button>
+                  </div>
+                  <div className="day-meetings">
+                    {data.classes
+                      .filter(
+                        (c) =>
+                          classMatches(c.id) &&
+                          matches(c.name, c.code, c.schedule) &&
+                          meetsOn(c, selectedDay),
+                      )
+                      .sort((a, b) =>
+                        a.calendarSchedule!.startTime.localeCompare(
+                          b.calendarSchedule!.startTime,
+                        ),
+                      )
+                      .map((c) => (
+                        <button
+                          key={c.id}
+                          className="calendar-item"
+                          style={{ '--course-color': c.color } as CSSProperties}
+                          onClick={() => openEditor('classes', c)}
+                        >
+                          <BookOpen size={16} />
+                          <strong>{c.name}</strong>
+                          <span>
+                            {c.calendarSchedule!.startTime}–
+                            {c.calendarSchedule!.endTime}
+                          </span>
+                          {c.schedule && <span>{c.schedule}</span>}
+                        </button>
+                      ))}
                   </div>
                   {table(assignments.filter((a) => a.dueDate === selectedDay))}
                 </div>
@@ -1496,10 +1563,10 @@ function ClassCard({
       </div>
       <h3>{c.name}</h3>
       <p>{c.teacher || 'Your next chapter starts here'}</p>
-      {c.schedule && (
+      {classScheduleLabel(c) && (
         <p className="class-schedule">
           <CalendarDays size={12} />
-          {c.schedule}
+          {classScheduleLabel(c)}
         </p>
       )}
       <div className="class-card-bottom">
@@ -1536,13 +1603,28 @@ function EditorForm({
 }) {
   const item = editor.item as Partial<Course & Assignment & Note> | undefined;
   const [color, setColor] = useState(item?.color || colors[0]);
+  const [onCalendar, setOnCalendar] = useState(!!item?.calendarSchedule);
   const submit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const values = Object.fromEntries(new FormData(e.currentTarget));
+    const form = new FormData(e.currentTarget);
+    const values = Object.fromEntries(form);
     void onSave({
       ...values,
       id: item?.id || crypto.randomUUID(),
-      ...(editor.kind === 'classes' ? { color } : {}),
+      ...(editor.kind === 'classes'
+        ? {
+            color,
+            calendarSchedule: onCalendar
+              ? {
+                  weekdays: form.getAll('weekday').map(Number),
+                  startTime: form.get('startTime'),
+                  endTime: form.get('endTime'),
+                  startDate: form.get('startDate'),
+                  endDate: form.get('endDate'),
+                }
+              : null,
+          }
+        : {}),
     }).catch(() => {});
   };
   return (
@@ -1582,7 +1664,7 @@ function EditorForm({
               </label>
             </div>
             <label>
-              Class schedule{' '}
+              Schedule notes / location{' '}
               <Input
                 name="schedule"
                 defaultValue={item?.schedule}
@@ -1590,6 +1672,84 @@ function EditorForm({
                 maxLength={200}
               />
             </label>
+            <label className="schedule-toggle">
+              <input
+                type="checkbox"
+                checked={onCalendar}
+                onChange={(e) => setOnCalendar(e.target.checked)}
+              />
+              Show recurring classes on calendar
+            </label>
+            {onCalendar && (
+              <div className="schedule-fields">
+                <p className="secondary-text">
+                  Repeats weekly between the dates below. Times stay in your
+                  class’s local time.
+                </p>
+                <fieldset className="weekday-picker">
+                  <legend>Meeting days</legend>
+                  <div>
+                    {weekdays.map((day, index) => (
+                      <label key={day}>
+                        <input
+                          type="checkbox"
+                          name="weekday"
+                          value={index}
+                          defaultChecked={item?.calendarSchedule?.weekdays.includes(
+                            index,
+                          )}
+                        />
+                        <span>{day}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+                <div className="form-row">
+                  <label>
+                    Start time
+                    <Input
+                      type="time"
+                      name="startTime"
+                      required
+                      defaultValue={
+                        item?.calendarSchedule?.startTime || '09:00'
+                      }
+                    />
+                  </label>
+                  <label>
+                    End time
+                    <Input
+                      type="time"
+                      name="endTime"
+                      required
+                      defaultValue={item?.calendarSchedule?.endTime || '10:00'}
+                    />
+                  </label>
+                </div>
+                <div className="form-row">
+                  <label>
+                    First date
+                    <Input
+                      type="date"
+                      name="startDate"
+                      required
+                      defaultValue={
+                        item?.calendarSchedule?.startDate || localDate()
+                      }
+                    />
+                  </label>
+                  <label>
+                    Last date
+                    <Input
+                      type="date"
+                      name="endDate"
+                      required
+                      defaultValue={item?.calendarSchedule?.endDate}
+                    />
+                  </label>
+                </div>
+              </div>
+            )}
             <div>
               <span className="field-label">Class color</span>
               <div className="color-options">
