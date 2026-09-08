@@ -1128,6 +1128,23 @@ h1 {
     display: none;
   }
 }
+
+/* Final override for the action row: keep it dark in every interaction state. */
+.panel-add,
+.panel-add:hover,
+.panel-add:focus,
+.panel-add:focus-visible,
+.kanban-column > .panel-add,
+.kanban-column > .panel-add:hover {
+  background: #1b1d27 !important;
+  color: #f2f1f7 !important;
+  opacity: 1;
+}
+.panel-add:hover,
+.panel-add:focus-visible,
+.kanban-column > .panel-add:hover {
+  background: #2a2b39 !important;
+}
 @media (max-width: 500px) {
   .sidebar {
     width: 58px;
