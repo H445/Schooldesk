@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   Building2,
   DoorOpen,
+  ExternalLink,
   GraduationCap,
   Info,
   Library,
@@ -9,9 +10,12 @@ import {
   MapPinned,
   Navigation,
   ParkingSquare,
+  RotateCcw,
   Stethoscope,
   Target,
   Utensils,
+  ZoomIn,
+  ZoomOut,
   type LucideIcon,
 } from 'lucide-react';
 import type { Course } from '@/lib/school';
@@ -105,6 +109,76 @@ function titleForPin(pin: ClassPin) {
   return `${pin.room}: ${pin.courses.map((course) => course.name).join(', ')}`;
 }
 
+const PDF_ZOOMS = [100, 125, 150, 200, 250, 300] as const;
+
+function OfficialFloorPlanViewer({
+  source,
+  officialSource,
+}: {
+  source: string;
+  officialSource: string;
+}) {
+  const [zoomIndex, setZoomIndex] = useState(0);
+  const zoom = PDF_ZOOMS[zoomIndex];
+  const pdfSource = `${source}#page=1&zoom=${zoom}`;
+  return (
+    <section className="panel actual-floorplan">
+      <div className="actual-floorplan-heading">
+        <div>
+          <span className="eyebrow">Official plan</span>
+          <h2>Hallways and room layout</h2>
+          <p>
+            The complete St. Clair plan is embedded below so you can follow
+            hallways, stairs, elevators, entrances, and room clusters.
+          </p>
+        </div>
+        <div className="actual-floorplan-actions">
+          <span aria-live="polite">{zoom}%</span>
+          <button
+            aria-label="Zoom out floor plan"
+            disabled={zoomIndex === 0}
+            onClick={() => setZoomIndex((index) => Math.max(0, index - 1))}
+          >
+            <ZoomOut size={16} />
+          </button>
+          <button
+            aria-label="Zoom in floor plan"
+            disabled={zoomIndex === PDF_ZOOMS.length - 1}
+            onClick={() =>
+              setZoomIndex((index) => Math.min(PDF_ZOOMS.length - 1, index + 1))
+            }
+          >
+            <ZoomIn size={16} />
+          </button>
+          <button
+            aria-label="Reset floor plan zoom"
+            disabled={zoomIndex === 0}
+            onClick={() => setZoomIndex(0)}
+          >
+            <RotateCcw size={15} />
+          </button>
+          <a href={officialSource} target="_blank" rel="noreferrer">
+            <ExternalLink size={14} />
+            Open PDF
+          </a>
+        </div>
+      </div>
+      <div className="actual-floorplan-frame">
+        <iframe
+          key={pdfSource}
+          title="St. Clair College Main Windsor Campus official floor plans"
+          src={pdfSource}
+          loading="lazy"
+        />
+      </div>
+      <p className="actual-floorplan-caption">
+        Use the viewer scrollbar to move through the one-page plan. Zooming
+        keeps the vector labels sharp for room and hallway details.
+      </p>
+    </section>
+  );
+}
+
 export default function CampusMap({
   schoolId = DEFAULT_SCHOOL_ID,
   classes,
@@ -190,6 +264,11 @@ export default function CampusMap({
           </button>
         ))}
       </div>
+
+      <OfficialFloorPlanViewer
+        source={campus.localMapPath}
+        officialSource={campus.mapUrl}
+      />
 
       <div className="campus-map-grid">
         <div className="campus-plan panel">

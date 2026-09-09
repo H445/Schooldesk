@@ -63,6 +63,7 @@ export type CampusDefinition = {
   shortName: string;
   address: string;
   mapUrl: string;
+  localMapPath: string;
   profileUrl: string;
   buildings: CampusBuilding[];
   floors: CampusFloor[];
@@ -632,6 +633,7 @@ export const stClairMainCampus: CampusDefinition = {
   address: '2000 Talbot Road West, Windsor, ON N9A 6S4',
   mapUrl:
     'https://www.stclaircollege.ca/sites/default/files/campus-maps/windsor-campus-map.pdf',
+  localMapPath: './windsor-campus-map.pdf',
   profileUrl: 'https://www.stclaircollege.ca/campus-profiles',
   buildings: campusBuildings,
   floors: campusFloors,
