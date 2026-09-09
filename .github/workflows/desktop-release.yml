@@ -83,7 +83,13 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: schooldesk-${{ matrix.platform }}-${{ needs.verify.outputs.version }}
-          path: release/**
+          path: |
+            release/*.AppImage
+            release/*.deb
+            release/*.dmg
+            release/*.exe
+            release/*.blockmap
+            release/latest*.yml
           if-no-files-found: error
 
   publish:
@@ -112,6 +118,16 @@ jobs:
               --title "Schooldesk $RELEASE_TAG" \
               --generate-notes
           fi
+          while IFS= read -r asset; do
+            gh release delete-asset "$RELEASE_TAG" "$asset" \
+              --repo "$GITHUB_REPOSITORY" \
+              --yes
+          done < <(
+            gh release view "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --json assets \
+              --jq '.assets[].name'
+          )
           mapfile -t assets < <(find release -type f -print)
           if ((${#assets[@]} == 0)); then
             echo 'No packaged release assets found.' >&2
