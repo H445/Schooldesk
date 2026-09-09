@@ -6,12 +6,14 @@ import type {
   Reference,
   ReferenceKind,
 } from './school';
+import { availableCampuses } from './campus.ts';
 import { MAX_REFERENCE_BYTES, referenceAssetId } from './reference-storage.ts';
 export type Mutation = {
-  action: 'save' | 'delete' | 'clearExamples';
+  action: 'save' | 'delete' | 'clearExamples' | 'setSchool';
   kind?: 'classes' | 'assignments' | 'notes';
   record?: unknown;
   id?: string;
+  schoolId?: unknown;
 };
 const text = (v: unknown, name: string, max = 200, required = false) => {
   if (typeof v !== 'string' || v.length > max || (required && !v.trim()))
@@ -99,6 +101,12 @@ function validateReferences(input: unknown): Reference[] {
 }
 export function applyMutation(current: SchoolData, input: unknown): SchoolData {
   const m = record(input);
+  if (m.action === 'setSchool') {
+    const schoolId = text(m.schoolId, 'school', 100, true);
+    if (!availableCampuses.some((campus) => campus.id === schoolId))
+      throw new Error('Choose a supported school.');
+    return { ...current, schoolId };
+  }
   // Preserve untouched records so large notes are not copied on every save
   // and derived UI caches stay valid for unchanged collections.
   const d = { ...current };

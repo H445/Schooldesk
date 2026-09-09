@@ -92,6 +92,7 @@ export type Note = {
   references?: Reference[];
 };
 export type SchoolData = {
+  schoolId?: string;
   classes: Course[];
   assignments: Assignment[];
   notes: Note[];
@@ -292,6 +293,7 @@ export function makeOfflineWorkspace(): SchoolData {
     color,
   });
   return {
+    schoolId: 'st-clair-windsor-main',
     classes: [
       course('mad-103-002', 'MAD 103 - 002', 'MAD 103 - 002', '#518dd1', [
         meeting(1, '11:00', '14:00', 'A2134'),

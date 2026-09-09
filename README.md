@@ -14,6 +14,8 @@ Notes and classes can hold as many references as needed. Paste an `http` or `htt
 
 Use the **References** page in the Workspace section to search and filter every attached item, see which class or note owns it, remove stale items, or add a new reference directly to a class or note.
 
+The **Campus** page includes a school selector, a floor-by-floor schematic for St. Clair College’s Main Windsor Campus, official room ranges, pins for class meeting rooms, and searchable points of interest such as Student Services, the library, food, health, parking, and the SportsPlex. The map links to St. Clair’s [official Main Windsor Campus Map](https://www.stclaircollege.ca/sites/default/files/campus-maps/windsor-campus-map.pdf) for current signage and construction updates.
+
 ## Desktop app
 
 Schooldesk is distributed as an offline Electron desktop app. The desktop shell bundles the dashboard locally, stores classes, assignments, notes, and schedules on the device, and never contacts the hosted site or a remote API. It starts with a dark, resizable window and blocks network navigation.

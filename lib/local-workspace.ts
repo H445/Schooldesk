@@ -5,7 +5,7 @@ const STORAGE_KEY = 'schooldesk.workspace.v1';
 // Mutations preserve unchanged arrays. Reuse their serialized form, so
 // completing an assignment does not re-encode every note on the device.
 const serializedCollections = new WeakMap<object, string>();
-function serializeCollection(collection: SchoolData[keyof SchoolData]) {
+function serializeCollection(collection: object) {
   let serialized = serializedCollections.get(collection);
   if (serialized === undefined) {
     serialized = JSON.stringify(collection);
@@ -15,8 +15,10 @@ function serializeCollection(collection: SchoolData[keyof SchoolData]) {
 }
 
 export function serializeWorkspace(workspace: LocalWorkspace) {
-  const { classes, assignments, notes } = workspace.data;
-  return `{"data":{"classes":${serializeCollection(classes)},"assignments":${serializeCollection(assignments)},"notes":${serializeCollection(notes)}},"revision":${workspace.revision}}`;
+  const { classes, assignments, notes, schoolId } = workspace.data;
+  const school =
+    schoolId === undefined ? '' : `,"schoolId":${JSON.stringify(schoolId)}`;
+  return `{"data":{"classes":${serializeCollection(classes)},"assignments":${serializeCollection(assignments)},"notes":${serializeCollection(notes)}${school}},"revision":${workspace.revision}}`;
 }
 
 export type LocalWorkspace = { data: SchoolData; revision: number };

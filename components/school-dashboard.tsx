@@ -34,6 +34,7 @@ import {
   List,
   ListTodo,
   Link2,
+  Map as MapIcon,
   Columns3,
   Pencil,
   Paperclip,
@@ -88,6 +89,8 @@ import {
   referenceAssetId,
   storeReferenceAsset,
 } from '@/lib/reference-storage';
+import CampusMap from '@/components/campus-map';
+import { availableCampuses, DEFAULT_SCHOOL_ID } from '@/lib/campus';
 
 type View =
   | 'Overview'
@@ -95,6 +98,7 @@ type View =
   | 'Assignments'
   | 'Notes'
   | 'References'
+  | 'Campus'
   | 'Calendar';
 type Editor = {
   kind: 'classes' | 'assignments' | 'notes';
@@ -113,6 +117,7 @@ const navigation: { icon: LucideIcon; label: View }[] = [
   { icon: ListTodo, label: 'Assignments' },
   { icon: FileText, label: 'Notes' },
   { icon: Paperclip, label: 'References' },
+  { icon: MapIcon, label: 'Campus' },
   { icon: CalendarDays, label: 'Calendar' },
 ];
 const statuses: Assignment['status'][] = ['To do', 'In progress', 'Done'];
@@ -234,6 +239,16 @@ export default function SchoolDashboard() {
   );
   const act = (m: Mutation, message?: string) => {
     void mutate(m, message).catch(() => {});
+  };
+  const selectedSchoolId = data.schoolId || DEFAULT_SCHOOL_ID;
+  const selectSchool = (schoolId: string) => {
+    if (
+      schoolId === selectedSchoolId ||
+      !availableCampuses.some((campus) => campus.id === schoolId)
+    )
+      return;
+    act({ action: 'setSchool', schoolId }, 'School selected');
+    navigate('Overview');
   };
   const navigate = (next: View, id = '') => {
     setView(next);
@@ -438,7 +453,7 @@ export default function SchoolDashboard() {
       filter: 'Done',
     },
   ];
-  const heading = activeClass?.name || view;
+  const heading = view === 'Campus' ? 'Campus map' : activeClass?.name || view;
   const primaryKind =
     view === 'Classes' && !activeClass
       ? 'classes'
@@ -446,6 +461,7 @@ export default function SchoolDashboard() {
         ? 'notes'
         : 'assignments';
   const isReferenceView = view === 'References';
+  const isCampusView = view === 'Campus';
   const kindLabel = (kind: Editor['kind']) =>
     kind === 'classes' ? 'class' : kind === 'notes' ? 'note' : 'assignment';
   const removeReference = (entry: ReferenceEntry) => {
@@ -748,6 +764,21 @@ export default function SchoolDashboard() {
             )}
           </div>
           <div className="topbar-right">
+            <label className="school-picker">
+              <span>School</span>
+              <select
+                aria-label="Select school"
+                value={selectedSchoolId}
+                disabled={!loaded || busy}
+                onChange={(event) => selectSchool(event.target.value)}
+              >
+                {availableCampuses.map((campus) => (
+                  <option key={campus.id} value={campus.id}>
+                    {campus.shortName}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="search-box">
               <Search size={17} />
               <input
@@ -783,21 +814,23 @@ export default function SchoolDashboard() {
                 </p>
               )}
             </div>
-            <Button
-              aria-label={`New ${isReferenceView ? 'reference' : kindLabel(primaryKind)}`}
-              disabled={!loaded || busy}
-              className="primary-button"
-              onClick={() =>
-                isReferenceView
-                  ? setReferenceManagerOpen(true)
-                  : openEditor(primaryKind)
-              }
-            >
-              <Plus size={17} />
-              <span>
-                New {isReferenceView ? 'reference' : kindLabel(primaryKind)}
-              </span>
-            </Button>
+            {!isCampusView && (
+              <Button
+                aria-label={`New ${isReferenceView ? 'reference' : kindLabel(primaryKind)}`}
+                disabled={!loaded || busy}
+                className="primary-button"
+                onClick={() =>
+                  isReferenceView
+                    ? setReferenceManagerOpen(true)
+                    : openEditor(primaryKind)
+                }
+              >
+                <Plus size={17} />
+                <span>
+                  New {isReferenceView ? 'reference' : kindLabel(primaryKind)}
+                </span>
+              </Button>
+            )}
           </div>
           <div className="date-line">
             <CalendarDays size={15} />
@@ -1005,6 +1038,14 @@ export default function SchoolDashboard() {
               </div>
             </>
           )}
+          {view === 'Campus' && (
+            <CampusMap
+              schoolId={selectedSchoolId}
+              classes={data.classes}
+              selectedClassId={classId}
+              onSelectClass={setClassId}
+            />
+          )}
           {view === 'Classes' && !activeClass && (
             <>
               <div className="section-heading view-section-heading">
@@ -1032,6 +1073,13 @@ export default function SchoolDashboard() {
                 >
                   <Pencil size={14} />
                   Edit class
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => navigate('Campus', activeClass.id)}
+                >
+                  <MapIcon size={14} />
+                  View on campus map
                 </Button>
               </div>
               <ReferencePreviewList references={activeClass.references} />
