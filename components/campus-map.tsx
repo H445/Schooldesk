@@ -26,9 +26,11 @@ import {
   DEFAULT_SCHOOL_ID,
   extractRoomCode,
   floorForRoom,
+  positionForOfficialPlan,
   positionForRoom,
   type CampusCategory,
   type CampusFloorId,
+  type CampusPoi,
 } from '@/lib/campus';
 
 type CampusMapProps = {
@@ -111,16 +113,43 @@ function titleForPin(pin: ClassPin) {
 
 const PDF_ZOOMS = [100, 125, 150, 200, 250, 300] as const;
 
+const OFFICIAL_PLAN_POI_POSITIONS: Record<string, { x: number; y: number }> = {
+  'campus-eats': { x: 42, y: 68 },
+  parking: { x: 31, y: 76 },
+  sportsplex: { x: 51, y: 53 },
+  tennis: { x: 66, y: 76 },
+};
+
+function officialPlanPositionForPoi(poi: CampusPoi) {
+  const floor = poi.room ? floorForRoom(poi.room) : undefined;
+  if (poi.room && floor) return positionForOfficialPlan(poi.room, floor);
+  return OFFICIAL_PLAN_POI_POSITIONS[poi.id] ?? { x: 50, y: 76 };
+}
+
 function OfficialFloorPlanViewer({
   source,
   officialSource,
+  pins,
+  pois,
+  selectedClassId,
+  selectedPoiId,
+  selectedFloor,
+  onSelectClass,
+  onSelectPoi,
 }: {
   source: string;
   officialSource: string;
+  pins: ClassPin[];
+  pois: CampusPoi[];
+  selectedClassId?: string;
+  selectedPoiId?: string;
+  selectedFloor: CampusFloorId;
+  onSelectClass: (course: Course, floor: CampusFloorId) => void;
+  onSelectPoi: (id: string) => void;
 }) {
   const [zoomIndex, setZoomIndex] = useState(0);
   const zoom = PDF_ZOOMS[zoomIndex];
-  const pdfSource = `${source}#page=1&zoom=${zoom}`;
+  const showLabels = zoom >= 150;
   return (
     <section className="panel actual-floorplan">
       <div className="actual-floorplan-heading">
@@ -128,8 +157,9 @@ function OfficialFloorPlanViewer({
           <span className="eyebrow">Official plan</span>
           <h2>Hallways and room layout</h2>
           <p>
-            The complete St. Clair plan is embedded below so you can follow
-            hallways, stairs, elevators, entrances, and room clusters.
+            The complete St. Clair plan is the base layer. Your classes and
+            campus points are pinned directly on top of the room and hallway
+            layout so they stay aligned as you zoom and scroll.
           </p>
         </div>
         <div className="actual-floorplan-actions">
@@ -164,16 +194,115 @@ function OfficialFloorPlanViewer({
         </div>
       </div>
       <div className="actual-floorplan-frame">
-        <iframe
-          key={pdfSource}
-          title="St. Clair College Main Windsor Campus official floor plans"
-          src={pdfSource}
-          loading="lazy"
-        />
+        <div className="floorplan-overlay-viewport">
+          <div
+            className="floorplan-overlay-canvas"
+            style={{ width: `${zoom}%` }}
+          >
+            <img
+              src={source}
+              alt="Official St. Clair College Main Windsor Campus floor plan"
+              draggable={false}
+            />
+            <svg
+              className="floorplan-overlay-layer"
+              viewBox="0 0 100 100"
+              preserveAspectRatio="none"
+              aria-label="Class and point-of-interest overlays"
+            >
+              {pois.map((poi) => {
+                const position = officialPlanPositionForPoi(poi);
+                const selected = poi.id === selectedPoiId;
+                const floorActive =
+                  selectedFloor === 'campus' || poi.floor === selectedFloor;
+                return (
+                  <a
+                    href={`#official-poi-${poi.id}`}
+                    key={poi.id}
+                    className={`floorplan-overlay-poi ${floorActive ? 'floor-active' : 'floor-muted'} ${selected ? 'selected' : ''}`}
+                    aria-label={`${poi.name}${poi.room ? `, room ${poi.room}` : ''}`}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      onSelectPoi(poi.id);
+                    }}
+                  >
+                    <circle
+                      cx={position.x}
+                      cy={position.y}
+                      r="1.15"
+                      className="floorplan-overlay-poi-dot"
+                    />
+                    {(showLabels || selected) && (
+                      <text
+                        x={position.x + 1.4}
+                        y={position.y + 0.8}
+                        className="floorplan-overlay-label floorplan-overlay-poi-label"
+                      >
+                        {poi.name}
+                      </text>
+                    )}
+                    <title>{poi.name}</title>
+                  </a>
+                );
+              })}
+              {pins.map((pin) => {
+                const position = positionForOfficialPlan(pin.room, pin.floor);
+                const active = pin.courses.some(
+                  (course) => course.id === selectedClassId,
+                );
+                const floorActive =
+                  selectedFloor === 'campus' || pin.floor === selectedFloor;
+                return (
+                  <a
+                    href={`#official-class-${pin.floor}-${pin.room}`}
+                    key={`${pin.floor}-${pin.room}`}
+                    className={`floorplan-overlay-class ${floorActive ? 'floor-active' : 'floor-muted'} ${active ? 'selected' : ''}`}
+                    aria-label={titleForPin(pin)}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      onSelectClass(pin.courses[0], pin.floor);
+                    }}
+                  >
+                    <circle
+                      cx={position.x}
+                      cy={position.y}
+                      r="1.55"
+                      className="floorplan-overlay-class-halo"
+                    />
+                    <circle
+                      cx={position.x}
+                      cy={position.y}
+                      r="1.05"
+                      className="floorplan-overlay-class-dot"
+                    />
+                    <text
+                      x={position.x}
+                      y={position.y + 0.45}
+                      textAnchor="middle"
+                      className="floorplan-overlay-class-count"
+                    >
+                      {pin.courses.length}
+                    </text>
+                    {(showLabels || active) && (
+                      <text
+                        x={position.x + 1.9}
+                        y={position.y - 1.2}
+                        className="floorplan-overlay-label floorplan-overlay-class-label"
+                      >
+                        {pin.room}
+                      </text>
+                    )}
+                    <title>{titleForPin(pin)}</title>
+                  </a>
+                );
+              })}
+            </svg>
+          </div>
+        </div>
       </div>
       <p className="actual-floorplan-caption">
-        Use the viewer scrollbar to move through the one-page plan. Zooming
-        keeps the vector labels sharp for room and hallway details.
+        Scroll inside the plan to pan across the one-page layout. The source PDF
+        remains available for printing and full-resolution room labels.
       </p>
     </section>
   );
@@ -266,8 +395,15 @@ export default function CampusMap({
       </div>
 
       <OfficialFloorPlanViewer
-        source={campus.localMapPath}
+        source={campus.localMapImagePath}
         officialSource={campus.mapUrl}
+        pins={pins}
+        pois={campus.pois}
+        selectedClassId={selectedClassId}
+        selectedPoiId={selectedPoiId}
+        selectedFloor={selectedFloor}
+        onSelectClass={selectClass}
+        onSelectPoi={(id) => setSelectedPoiId(id)}
       />
 
       <div className="campus-map-grid">

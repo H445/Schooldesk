@@ -64,6 +64,7 @@ export type CampusDefinition = {
   address: string;
   mapUrl: string;
   localMapPath: string;
+  localMapImagePath: string;
   profileUrl: string;
   buildings: CampusBuilding[];
   floors: CampusFloor[];
@@ -634,6 +635,7 @@ export const stClairMainCampus: CampusDefinition = {
   mapUrl:
     'https://www.stclaircollege.ca/sites/default/files/campus-maps/windsor-campus-map.pdf',
   localMapPath: './windsor-campus-map.pdf',
+  localMapImagePath: './windsor-campus-map.png',
   profileUrl: 'https://www.stclaircollege.ca/campus-profiles',
   buildings: campusBuildings,
   floors: campusFloors,
@@ -704,6 +706,64 @@ const ROOM_ANCHORS: Record<
   F3007: { floor: 'third', x: 87, y: 35 },
   F3013: { floor: 'third', x: 87, y: 24 },
 };
+
+/** Approximate positions on the bundled one-page official campus plan. */
+const OFFICIAL_PLAN_ROOM_ANCHORS: Record<string, { x: number; y: number }> = {
+  A0330: { x: 49, y: 91 },
+  A0336: { x: 42, y: 91 },
+  A0341: { x: 47, y: 91 },
+  A1104: { x: 18, y: 58 },
+  A1154: { x: 43, y: 58 },
+  A1295: { x: 33, y: 67 },
+  A1305: { x: 42, y: 68 },
+  A1341: { x: 54, y: 65 },
+  A1401: { x: 47, y: 63 },
+  A2110: { x: 33, y: 26 },
+  A2134: { x: 33, y: 25 },
+  A2303: { x: 41, y: 30 },
+  A2332: { x: 43, y: 31 },
+  A2401: { x: 55, y: 29 },
+  A2409: { x: 61, y: 29 },
+  A2504: { x: 62, y: 25 },
+  A2612: { x: 47, y: 23 },
+  A3302: { x: 44, y: 7 },
+  A4101: { x: 4, y: 4 },
+  B1006: { x: 13, y: 55 },
+  F1001: { x: 54, y: 65 },
+  F3007: { x: 54, y: 44 },
+  F3013: { x: 54, y: 43 },
+};
+
+const OFFICIAL_PLAN_FLOOR_REGIONS: Record<
+  CampusFloorId,
+  { x: number; y: number; width: number; height: number }
+> = {
+  campus: { x: 49, y: 76, width: 42, height: 16 },
+  basement: { x: 39, y: 91, width: 23, height: 5 },
+  first: { x: 35, y: 61, width: 38, height: 16 },
+  second: { x: 38, y: 25, width: 28, height: 13 },
+  third: { x: 48, y: 7, width: 18, height: 5 },
+  fourth: { x: 12, y: 4, width: 15, height: 4 },
+};
+
+/** Return a normalized (0–100) position for a room on the official plan image. */
+export function positionForOfficialPlan(room: string, floor: CampusFloorId) {
+  const normalizedRoom = room.toUpperCase();
+  const anchor = OFFICIAL_PLAN_ROOM_ANCHORS[normalizedRoom];
+  if (anchor) return anchor;
+
+  const prefix = normalizedRoom[0];
+  if (prefix === 'B') return { x: 14, y: 55 };
+  if (prefix === 'F') return { x: 54, y: floor === 'third' ? 44 : 65 };
+
+  const region = OFFICIAL_PLAN_FLOOR_REGIONS[floor];
+  const number = Number(normalizedRoom.match(/\d+/)?.[0] ?? 0);
+  const hash = number % 997;
+  return {
+    x: region.x + (((hash * 17) % 1000) / 1000) * region.width,
+    y: region.y + (((hash * 31) % 1000) / 1000) * region.height,
+  };
+}
 
 export function positionForRoom(room: string, floor: CampusFloorId) {
   const anchor = ROOM_ANCHORS[room.toUpperCase()];
