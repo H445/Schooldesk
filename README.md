@@ -27,5 +27,3 @@ Run `npm install` once, then use `npm run desktop:test` to rebuild the offline r
 - `npx tsc --noEmit`
 - `node --experimental-strip-types --test tests/*.test.mjs`
 - `npm run build`
-
-The optional WebMCP interface exposes `read_school_workspace` and `create_school_assignment` when the browser provides `document.modelContext`. A supported WebMCP validation context was not available during implementation; these optional tools have not been verified in a live registry. They do not affect the normal interface.
