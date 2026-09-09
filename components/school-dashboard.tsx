@@ -681,14 +681,8 @@ export default function SchoolDashboard() {
                           {data.classes.length}
                         </span>
                       </h2>
-                      <button
-                        className="text-link"
-                        onClick={() => navigate('Classes')}
-                      >
-                        View all <ArrowRight size={15} />
-                      </button>
                     </div>
-                    {cards(classes.slice(0, 4))}
+                    {cards(classes)}
                     {!classes.length && !query && (
                       <Button
                         variant="outline"
@@ -1406,10 +1400,14 @@ function ClassCard({
         <span className="class-icon">
           <BookOpen size={21} />
         </span>
-        <span className="course-code">{c.code || 'CLASS'}</span>
+        <div className="class-card-title">
+          <h3>{c.name}</h3>
+          {c.code && c.code !== c.name && (
+            <span className="course-code">{c.code}</span>
+          )}
+        </div>
         <ArrowRight size={16} />
       </div>
-      <h3>{c.name}</h3>
       {c.teacher && <p>{c.teacher}</p>}
       {classScheduleLabel(c) && (
         <p className="class-schedule">

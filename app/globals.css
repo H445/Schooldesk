@@ -735,7 +735,7 @@ h1 {
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--surface);
-  padding: 18px 19px;
+  padding: 14px 16px;
   text-align: left;
   min-width: 0;
   transition:
@@ -750,7 +750,7 @@ h1 {
   display: flex;
   align-items: center;
   gap: 9px;
-  margin-bottom: 15px;
+  margin-bottom: 8px;
 }
 .class-icon {
   display: grid;
@@ -770,7 +770,13 @@ h1 {
   margin-left: auto;
   color: var(--muted-foreground);
 }
-.class-card h3 {
+.class-card-title {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.class-card-title h3 {
   font-weight: 550;
   font-size: 1.125rem;
 }
@@ -784,8 +790,8 @@ h1 {
   justify-content: space-between;
   font-size: 0.875rem;
   color: var(--muted-foreground);
-  margin-top: 24px;
-  margin-bottom: 8px;
+  margin-top: 15px;
+  margin-bottom: 6px;
 }
 .class-progress {
   height: 4px;
@@ -990,7 +996,7 @@ h1 {
     padding-block: 22px;
   }
   .class-card {
-    padding: 23px;
+    padding: 16px 18px;
   }
   .overview-grid {
     grid-template-columns: minmax(0, 1fr) 305px;
@@ -1793,7 +1799,7 @@ select:focus-visible {
 .toast > svg {
   color: var(--muted-foreground);
 }
-.class-card h3,
+.class-card-title h3,
 .side-courses button {
   overflow-wrap: anywhere;
 }
