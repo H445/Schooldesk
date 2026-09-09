@@ -2131,73 +2131,150 @@ select:focus-visible {
 .floorplan-overlay-layer {
   position: absolute;
   inset: 0;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  pointer-events: none;
+}
+.floorplan-overlay-background {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
-  overflow: visible;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  pointer-events: auto;
 }
-.floorplan-overlay-poi,
-.floorplan-overlay-class {
-  cursor: pointer;
-  outline: none;
-  transition: opacity 140ms ease;
+.floorplan-marker {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  line-height: 1;
 }
-.floorplan-overlay-poi.floor-muted,
-.floorplan-overlay-class.floor-muted {
-  opacity: 0.35;
+.floorplan-marker:hover,
+.floorplan-marker:focus-within,
+.floorplan-marker.selected {
+  z-index: 2;
 }
-.floorplan-overlay-poi-dot {
-  fill: #5ec9b0;
-  stroke: #102e2d;
-  stroke-width: 0.35;
-  vector-effect: non-scaling-stroke;
+.floorplan-marker.expanded {
+  z-index: 3;
 }
-.floorplan-overlay-poi:hover .floorplan-overlay-poi-dot,
-.floorplan-overlay-poi.selected .floorplan-overlay-poi-dot {
-  fill: #f6c453;
-  stroke: #4e3510;
-  stroke-width: 0.55;
-}
-.floorplan-overlay-class-halo {
-  fill: #7258d6;
-  fill-opacity: 0.35;
-  stroke: #ffffff;
-  stroke-width: 0.35;
-  vector-effect: non-scaling-stroke;
-}
-.floorplan-overlay-class-dot {
-  fill: #5f45c5;
-  stroke: #ffffff;
-  stroke-width: 0.35;
-  vector-effect: non-scaling-stroke;
-}
-.floorplan-overlay-class.selected .floorplan-overlay-class-halo {
-  fill: #f29a5b;
-  fill-opacity: 0.85;
-  stroke-width: 0.55;
-}
-.floorplan-overlay-class.selected .floorplan-overlay-class-dot {
-  fill: #d9602d;
-}
-.floorplan-overlay-class-count {
-  fill: #ffffff;
-  font-size: 1.45px;
+.floorplan-marker-dot {
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: #5f45c5;
+  color: white;
+  font-size: 11px;
   font-weight: 700;
-  pointer-events: none;
+  line-height: 1;
+  box-shadow:
+    0 0 0 2px #7258d655,
+    0 1px 4px #0005;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.floorplan-overlay-poi .floorplan-marker-dot {
+  background: #5ec9b0;
+  color: #102e2d;
+  box-shadow:
+    0 0 0 1px #164c4977,
+    0 1px 4px #0005;
+}
+.floorplan-poi-center {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #164c49;
+}
+.floorplan-marker.selected .floorplan-marker-dot {
+  background: #d9602d;
+  color: white;
+  box-shadow: 0 0 0 3px #f29a5b77;
+}
+.floorplan-marker-dot:focus-visible,
+.floorplan-overlay-background:focus-visible {
+  outline: 3px solid #302068;
+  outline-offset: 3px;
 }
 .floorplan-overlay-label {
-  paint-order: stroke;
-  stroke: #ffffff;
-  stroke-width: 0.65px;
-  stroke-linejoin: round;
-  font-size: 1.45px;
+  position: absolute;
+  left: 29px;
+  top: 50%;
+  transform: translateY(-50%);
+  max-width: 210px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 3px 5px;
+  border-radius: 3px;
+  background: #fffffff0;
+  color: #4b2b9f;
+  box-shadow: 0 1px 3px #0002;
+  font-size: 11px;
   font-weight: 700;
+  line-height: 1.2;
   pointer-events: none;
 }
-.floorplan-overlay-poi-label {
-  fill: #164c49;
+.floorplan-overlay-poi .floorplan-overlay-label {
+  color: #164c49;
 }
-.floorplan-overlay-class-label {
-  fill: #4b2b9f;
+.floorplan-marker-choices {
+  position: absolute;
+  left: 0;
+  top: 32px;
+  display: grid;
+  width: 250px;
+  min-width: 0;
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  padding: 4px;
+  border: 1px solid #bbb;
+  border-radius: 6px;
+  background: white;
+  box-shadow: 0 3px 14px #0003;
+  pointer-events: auto;
+}
+.floorplan-marker-choices button {
+  padding: 9px;
+  border: 0;
+  border-radius: 3px;
+  background: white;
+  color: #241e38;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: left;
+}
+.floorplan-marker-choices button:hover,
+.floorplan-marker-choices button:focus-visible {
+  background: #eee9fb;
+}
+.floorplan-unlocated-rooms {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+}
+.floorplan-unlocated-rooms button {
+  padding: 3px 7px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--link);
+  background: var(--surface);
 }
 .actual-floorplan-caption {
   margin-top: 9px;
@@ -2216,9 +2293,6 @@ select:focus-visible {
   color: var(--link);
   text-decoration: underline;
   text-underline-offset: 3px;
-}
-.floorplan-overlay-layer a:focus-visible {
-  outline: 2px solid #5f45c5;
 }
 .campus-floor-tabs {
   display: flex;

@@ -30,6 +30,7 @@ import {
   extractRoomCode,
   floorForRoom,
   positionForOfficialPlan,
+  positionForPoi,
   type CampusCategory,
   type CampusFloor,
   type CampusFloorId,
@@ -91,24 +92,18 @@ function classLocations(classes: Course[]) {
   return [...map.values()];
 }
 
-function titleForPin(pin: ClassPin) {
-  return `${pin.room}: ${pin.courses.map((course) => course.name).join(', ')}`;
-}
-
 const PDF_ZOOMS = [100, 125, 150, 200, 250, 300] as const;
 
-const OFFICIAL_PLAN_POI_POSITIONS: Record<string, { x: number; y: number }> = {
-  'campus-eats': { x: 42, y: 68 },
-  parking: { x: 31, y: 76 },
-  sportsplex: { x: 51, y: 53 },
-  tennis: { x: 66, y: 76 },
+type MarkerItem = {
+  id: string;
+  label: string;
+  shortLabel: string;
+  kind: 'class' | 'poi';
+  selected: boolean;
+  onSelect: () => void;
 };
 
-function officialPlanPositionForPoi(poi: CampusPoi) {
-  const floor = poi.room ? floorForRoom(poi.room) : undefined;
-  if (poi.room && floor) return positionForOfficialPlan(poi.room, floor);
-  return OFFICIAL_PLAN_POI_POSITIONS[poi.id] ?? { x: 50, y: 76 };
-}
+type PlanMarker = { x: number; y: number; items: MarkerItem[] };
 
 function OfficialFloorPlanViewer({
   source,
@@ -119,7 +114,6 @@ function OfficialFloorPlanViewer({
   selectedPoiId,
   selectedFloor,
   activeFloor,
-  visiblePinCount,
   onSelectClass,
   onSelectPoi,
   onClearSelection,
@@ -132,23 +126,55 @@ function OfficialFloorPlanViewer({
   selectedPoiId?: string;
   selectedFloor: CampusFloorId;
   activeFloor: CampusFloor;
-  visiblePinCount: number;
   onSelectClass: (course: Course, floor: CampusFloorId) => void;
   onSelectPoi: (id: string) => void;
   onClearSelection: () => void;
 }) {
   const [zoomIndex, setZoomIndex] = useState(0);
+  const [expandedMarker, setExpandedMarker] = useState('');
   const zoom = PDF_ZOOMS[zoomIndex];
   const showLabels = zoom >= 150;
   const detailedPlan = detailedPlanForFloor(selectedFloor);
-  const mapPins = detailedPlan
-    ? pins.filter((pin) => positionForDetailedPlan(pin.room, selectedFloor))
-    : pins;
-  const mapPois = detailedPlan
-    ? pois.filter(
-        (poi) => poi.room && positionForDetailedPlan(poi.room, selectedFloor),
-      )
-    : pois;
+  const roomPosition = (pin: ClassPin) =>
+    detailedPlan
+      ? positionForDetailedPlan(pin.room, selectedFloor)
+      : positionForOfficialPlan(pin.room, pin.floor);
+  const floorPins = pins.filter(
+    (pin) => selectedFloor === 'campus' || pin.floor === selectedFloor,
+  );
+  const mapPins = floorPins.filter(roomPosition);
+  const unlocatedPins = floorPins.filter((pin) => !roomPosition(pin));
+  const markers = new Map<string, PlanMarker>();
+  const addMarker = (position: { x: number; y: number }, item: MarkerItem) => {
+    const key = `${position.x}:${position.y}`;
+    const marker = markers.get(key) ?? { ...position, items: [] };
+    marker.items.push(item);
+    markers.set(key, marker);
+  };
+  for (const poi of pois) {
+    const position = positionForPoi(poi, selectedFloor);
+    if (!position) continue;
+    addMarker(position, {
+      id: poi.id,
+      label: `${poi.name} · ${position.location}`,
+      shortLabel: poi.name,
+      kind: 'poi',
+      selected: poi.id === selectedPoiId,
+      onSelect: () => onSelectPoi(poi.id),
+    });
+  }
+  for (const pin of mapPins) {
+    for (const course of pin.courses) {
+      addMarker(roomPosition(pin)!, {
+        id: course.id,
+        label: `${pin.room}: ${course.name}`,
+        shortLabel: pin.room,
+        kind: 'class',
+        selected: course.id === selectedClassId,
+        onSelect: () => onSelectClass(course, pin.floor),
+      });
+    }
+  }
   return (
     <section className="panel actual-floorplan">
       <div className="actual-floorplan-heading">
@@ -164,10 +190,7 @@ function OfficialFloorPlanViewer({
           <div className="floorplan-overlay-summary">
             <strong>{activeFloor.label}</strong>
             <span>
-              {detailedPlan ? mapPins.length : visiblePinCount} room pin
-              {(detailedPlan ? mapPins.length : visiblePinCount) === 1
-                ? ''
-                : 's'}
+              {mapPins.length} room pin{mapPins.length === 1 ? '' : 's'}
             </span>
             <span>
               <i className="floorplan-legend-dot class" /> Your classes
@@ -230,127 +253,127 @@ function OfficialFloorPlanViewer({
               }
               draggable={false}
             />
-            <svg
+            <fieldset
               className="floorplan-overlay-layer"
-              viewBox="0 0 100 100"
-              preserveAspectRatio="none"
               aria-label="Class and point-of-interest overlays"
             >
-              <a
-                href="#all-campus-classes"
+              <button
+                type="button"
+                className="floorplan-overlay-background"
                 aria-label="Clear map selection and show all classes"
-                onClick={(event) => {
-                  event.preventDefault();
+                onClick={() => {
+                  setExpandedMarker('');
                   onClearSelection();
                 }}
-              >
-                <rect width="100" height="100" fill="transparent" />
-              </a>
-              {mapPois.map((poi) => {
-                const position = detailedPlan
-                  ? positionForDetailedPlan(poi.room!, selectedFloor)!
-                  : officialPlanPositionForPoi(poi);
-                const selected = poi.id === selectedPoiId;
-                const floorActive =
-                  selectedFloor === 'campus' || poi.floor === selectedFloor;
-                return (
-                  <a
-                    href={`#official-poi-${poi.id}`}
-                    key={poi.id}
-                    className={`floorplan-overlay-poi ${floorActive ? 'floor-active' : 'floor-muted'} ${selected ? 'selected' : ''}`}
-                    aria-label={`${poi.name}${poi.room ? `, room ${poi.room}` : ''}`}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      onSelectPoi(poi.id);
-                    }}
-                  >
-                    <circle
-                      cx={position.x}
-                      cy={position.y}
-                      r="1.15"
-                      className="floorplan-overlay-poi-dot"
-                    />
-                    {(showLabels || selected) && (
-                      <text
-                        x={position.x + 1.4}
-                        y={position.y + 0.8}
-                        className="floorplan-overlay-label floorplan-overlay-poi-label"
-                      >
-                        {poi.name}
-                      </text>
-                    )}
-                    <title>{poi.name}</title>
-                  </a>
+              />
+              {[...markers].map(([key, marker]) => {
+                const active = marker.items.some((item) => item.selected);
+                const hasClasses = marker.items.some(
+                  (item) => item.kind === 'class',
                 );
-              })}
-              {mapPins.map((pin) => {
-                const position = detailedPlan
-                  ? positionForDetailedPlan(pin.room, selectedFloor)!
-                  : positionForOfficialPlan(pin.room, pin.floor);
-                const active = pin.courses.some(
-                  (course) => course.id === selectedClassId,
-                );
-                const floorActive =
-                  selectedFloor === 'campus' || pin.floor === selectedFloor;
+                const expanded = expandedMarker === key;
+                const label = [
+                  ...new Set(marker.items.map((item) => item.shortLabel)),
+                ].join(' / ');
+                const title = marker.items.map((item) => item.label).join('; ');
                 return (
-                  <a
-                    href={`#official-class-${pin.floor}-${pin.room}`}
-                    key={`${pin.floor}-${pin.room}`}
-                    className={`floorplan-overlay-class ${floorActive ? 'floor-active' : 'floor-muted'} ${active ? 'selected' : ''}`}
-                    aria-label={titleForPin(pin)}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      onSelectClass(pin.courses[0], pin.floor);
-                    }}
+                  <div
+                    key={key}
+                    className={`floorplan-marker ${hasClasses ? 'floorplan-overlay-class' : 'floorplan-overlay-poi'} ${active ? 'selected' : ''} ${expanded ? 'expanded' : ''}`}
+                    style={{ left: `${marker.x}%`, top: `${marker.y}%` }}
                   >
-                    <rect
-                      x={position.x - 1.6}
-                      y={position.y - 3}
-                      width={detailedPlan || showLabels || active ? 10 : 3.2}
-                      height="4.7"
-                      fill="transparent"
-                    />
-                    <circle
-                      cx={position.x}
-                      cy={position.y}
-                      r="1.55"
-                      className="floorplan-overlay-class-halo"
-                    />
-                    <circle
-                      cx={position.x}
-                      cy={position.y}
-                      r="1.05"
-                      className="floorplan-overlay-class-dot"
-                    />
-                    <text
-                      x={position.x}
-                      y={position.y + 0.45}
-                      textAnchor="middle"
-                      className="floorplan-overlay-class-count"
+                    <button
+                      type="button"
+                      className="floorplan-marker-dot"
+                      aria-label={title}
+                      title={title}
+                      aria-expanded={
+                        marker.items.length > 1 ? expanded : undefined
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === 'Escape') setExpandedMarker('');
+                      }}
+                      onClick={() => {
+                        if (marker.items.length > 1) {
+                          setExpandedMarker(expanded ? '' : key);
+                        } else {
+                          setExpandedMarker('');
+                          marker.items[0].onSelect();
+                        }
+                      }}
                     >
-                      {pin.courses.length}
-                    </text>
-                    {(detailedPlan || showLabels || active) && (
-                      <text
-                        x={position.x + 1.9}
-                        y={position.y - 1.2}
-                        className="floorplan-overlay-label floorplan-overlay-class-label"
-                      >
-                        {pin.room}
-                      </text>
+                      {hasClasses || marker.items.length > 1 ? (
+                        marker.items.length
+                      ) : (
+                        <span className="floorplan-poi-center" />
+                      )}
+                    </button>
+                    {(showLabels ||
+                      active ||
+                      expanded ||
+                      (detailedPlan && hasClasses)) && (
+                      <span className="floorplan-overlay-label">{label}</span>
                     )}
-                    <title>{titleForPin(pin)}</title>
-                  </a>
+                    {expanded && (
+                      <fieldset
+                        className="floorplan-marker-choices"
+                        aria-label="Items at this location"
+                      >
+                        {marker.items.map((item) => (
+                          <button
+                            type="button"
+                            key={`${item.kind}-${item.id}`}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Escape') {
+                                setExpandedMarker('');
+                                event.currentTarget
+                                  .closest('.floorplan-marker')
+                                  ?.querySelector<HTMLButtonElement>(
+                                    '.floorplan-marker-dot',
+                                  )
+                                  ?.focus();
+                              }
+                            }}
+                            onClick={() => {
+                              setExpandedMarker('');
+                              item.onSelect();
+                            }}
+                          >
+                            {item.label}
+                          </button>
+                        ))}
+                      </fieldset>
+                    )}
+                  </div>
                 );
               })}
-            </svg>
+            </fieldset>
           </div>
         </div>
       </div>
+      {unlocatedPins.length > 0 && (
+        <div className="floorplan-unlocated-rooms">
+          <span>
+            Rooms not individually marked on this{' '}
+            {detailedPlan ? 'drawing' : 'overview'}:
+          </span>
+          {unlocatedPins.map((pin) => (
+            <button
+              key={`${pin.floor}-${pin.room}`}
+              onClick={() => onSelectClass(pin.courses[0], pin.floor)}
+            >
+              {pin.room}
+              {!detailedPlan && positionForDetailedPlan(pin.room, pin.floor)
+                ? ' · View floor'
+                : ''}
+            </button>
+          ))}
+        </div>
+      )}
       <p className="actual-floorplan-caption">
         {detailedPlan
           ? 'Pins use room-label positions from this drawing. Rooms absent from the drawing remain in the class list. Third and fourth floors share one drawing.'
-          : 'Overview pins are approximate. Select a floor for room-level positions.'}{' '}
+          : 'Room pins align with printed room labels. Shared POI pins identify the building or room group shown on this overview; click one to choose a destination.'}{' '}
         Scroll to pan; open the PDF for full-resolution labels.
       </p>
       <nav
@@ -408,9 +431,6 @@ export default function CampusMap({
     campusFloors[0];
   const visiblePois = campus.pois.filter(
     (poi) => selectedFloor === 'campus' || poi.floor === selectedFloor,
-  );
-  const visiblePins = pins.filter(
-    (pin) => selectedFloor === 'campus' || pin.floor === selectedFloor,
   );
   const selectedPoi = campus.pois.find((poi) => poi.id === selectedPoiId);
   const classCountOnFloor = (floor: CampusFloorId) =>
@@ -483,7 +503,6 @@ export default function CampusMap({
         selectedPoiId={selectedPoiId}
         selectedFloor={selectedFloor}
         activeFloor={activeFloor}
-        visiblePinCount={visiblePins.length}
         onSelectClass={selectClass}
         onSelectPoi={(id) => setSelectedPoiId(id)}
         onClearSelection={() => {
@@ -516,6 +535,10 @@ export default function CampusMap({
               </button>
             </div>
             <p>{selectedPoi.description}</p>
+            <p>
+              {positionForPoi(selectedPoi, selectedFloor)?.location ??
+                'This location is not individually marked on the current drawing.'}
+            </p>
             <div className="campus-detail-meta">
               <span>{categoryLabels[selectedPoi.category]}</span>
               <span>
@@ -664,7 +687,10 @@ export default function CampusMap({
                   <Icon size={15} />
                   <span>
                     <strong>{poi.name}</strong>
-                    <small>{poi.room || categoryLabels[poi.category]}</small>
+                    <small>
+                      {positionForPoi(poi, selectedFloor)?.location ??
+                        `${poi.room || categoryLabels[poi.category]} · Not marked on this plan`}
+                    </small>
                   </span>
                 </button>
               );

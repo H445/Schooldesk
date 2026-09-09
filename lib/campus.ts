@@ -1,4 +1,5 @@
 import roomPositions from './campus-room-positions.json' with { type: 'json' };
+import overviewPositions from './campus-overview-positions.json' with { type: 'json' };
 
 export type CampusFloorId =
   | 'campus'
@@ -743,62 +744,90 @@ const ROOM_ANCHORS: Record<
   F3013: { floor: 'third', x: 87, y: 24 },
 };
 
-/** Approximate positions on the bundled one-page official campus plan. */
-const OFFICIAL_PLAN_ROOM_ANCHORS: Record<string, { x: number; y: number }> = {
-  A0330: { x: 49, y: 91 },
-  A0336: { x: 42, y: 91 },
-  A0341: { x: 47, y: 91 },
-  A1104: { x: 18, y: 58 },
-  A1154: { x: 43, y: 58 },
-  A1295: { x: 33, y: 67 },
-  A1305: { x: 42, y: 68 },
-  A1341: { x: 54, y: 65 },
-  A1401: { x: 47, y: 63 },
-  A2110: { x: 33, y: 26 },
-  A2134: { x: 33, y: 25 },
-  A2303: { x: 41, y: 30 },
-  A2332: { x: 43, y: 31 },
-  A2401: { x: 55, y: 29 },
-  A2409: { x: 61, y: 29 },
-  A2504: { x: 62, y: 25 },
-  A2612: { x: 47, y: 23 },
-  A3302: { x: 44, y: 7 },
-  A4101: { x: 4, y: 4 },
-  B1006: { x: 13, y: 55 },
-  F1001: { x: 54, y: 65 },
-  F3007: { x: 54, y: 44 },
-  F3013: { x: 54, y: 43 },
-};
-
-const OFFICIAL_PLAN_FLOOR_REGIONS: Record<
-  CampusFloorId,
-  { x: number; y: number; width: number; height: number }
-> = {
-  campus: { x: 49, y: 76, width: 42, height: 16 },
-  basement: { x: 39, y: 91, width: 23, height: 5 },
-  first: { x: 35, y: 61, width: 38, height: 16 },
-  second: { x: 38, y: 25, width: 28, height: 13 },
-  third: { x: 48, y: 7, width: 18, height: 5 },
-  fourth: { x: 12, y: 4, width: 15, height: 4 },
-};
-
-/** Return a normalized (0–100) position for a room on the official plan image. */
+/** Only individual room labels on this image qualify as room positions. */
 export function positionForOfficialPlan(room: string, floor: CampusFloorId) {
-  const normalizedRoom = room.toUpperCase();
-  const anchor = OFFICIAL_PLAN_ROOM_ANCHORS[normalizedRoom];
-  if (anchor) return anchor;
+  if (floorForRoom(room) !== floor) return undefined;
+  const positions: Record<string, { x: number; y: number }> = overviewPositions;
+  return positions[room.toUpperCase()];
+}
 
-  const prefix = normalizedRoom[0];
-  if (prefix === 'B') return { x: 14, y: 55 };
-  if (prefix === 'F') return { x: 54, y: floor === 'third' ? 44 : 65 };
+export type PlanPosition = { x: number; y: number; location: string };
 
-  const region = OFFICIAL_PLAN_FLOOR_REGIONS[floor];
-  const number = Number(normalizedRoom.match(/\d+/)?.[0] ?? 0);
-  const hash = number % 997;
-  return {
-    x: region.x + (((hash * 17) % 1000) / 1000) * region.width,
-    y: region.y + (((hash * 31) % 1000) / 1000) * region.height,
-  };
+// Named features checked against the bundled overview. These identify the
+// feature printed on the drawing, not an invented position for an unshown room.
+const OVERVIEW_POI_FEATURES: Record<string, PlanPosition> = {
+  'student-services': {
+    x: 27.9,
+    y: 24.97,
+    location: 'Student Services · A2110 suite',
+  },
+  eatery: { x: 42.3, y: 71.3, location: 'Eatery 101' },
+  welcome: { x: 59.17, y: 67.71, location: 'Welcome Centre' },
+  'career-services': { x: 35.44, y: 30.68, location: 'Career Services' },
+  'student-life': { x: 45.9, y: 25.8, location: 'Student Life Centre' },
+  'campus-eats': { x: 43.91, y: 67.92, location: 'Campus Eats / Hangar' },
+  sportsplex: { x: 52, y: 39.17, location: 'SportsPlex building' },
+  parking: { x: 65.79, y: 71.77, location: 'Visitor parking' },
+  tennis: { x: 63.94, y: 76.04, location: 'Zekelman Tennis Centre' },
+  bookstore: { x: 38.37, y: 62.71, location: 'Campus Book Store' },
+  registrar: {
+    x: 59.17,
+    y: 67.71,
+    location: 'Welcome Centre · rooms A1401–A1415',
+  },
+  international: {
+    x: 58.55,
+    y: 30.47,
+    location: 'Welcome Centre · rooms A2401–A2409',
+  },
+  'one-card': {
+    x: 58.55,
+    y: 30.47,
+    location: 'Welcome Centre · rooms A2401–A2409',
+  },
+  lockers: { x: 56.78, y: 27.86, location: 'Room group A2502–A2520' },
+  engineering: {
+    x: 12.63,
+    y: 62.87,
+    location: 'FCEM offices · rooms B1000–B1007',
+  },
+  'skilled-trades': {
+    x: 12.63,
+    y: 62.87,
+    location: 'FCEM offices · rooms B1000–B1007',
+  },
+  'health-sciences': { x: 54.7, y: 47.03, location: 'Toldo Centre building' },
+  nursing: { x: 54.7, y: 47.03, location: 'Toldo Centre building' },
+  dental: { x: 54.7, y: 47.03, location: 'Toldo Centre building' },
+  'print-shop': { x: 36.83, y: 92.55, location: 'Print Shop' },
+};
+
+// Named spaces without a standalone room code on the detailed drawings.
+const DETAILED_POI_FEATURES: Record<string, PlanPosition> = {
+  welcome: { x: 74.2, y: 62.4, location: 'Welcome Centre lobby' },
+  esports: { x: 26.1, y: 65.1, location: 'E-Sports Area' },
+  'student-life': { x: 54.9, y: 40.3, location: 'Student Life Centre' },
+  'student-services': {
+    x: 16.8,
+    y: 37.7,
+    location: 'Student Services · A2110 suite',
+  },
+};
+
+export function positionForPoi(
+  poi: CampusPoi,
+  floor: CampusFloorId,
+): PlanPosition | undefined {
+  if (floor !== 'campus' && poi.floor !== floor) return undefined;
+  const roomPosition = poi.room
+    ? floor === 'campus'
+      ? positionForOfficialPlan(poi.room, poi.floor)
+      : positionForDetailedPlan(poi.room, floor)
+    : undefined;
+  if (roomPosition) return { ...roomPosition, location: `Room ${poi.room}` };
+  return floor === 'campus'
+    ? OVERVIEW_POI_FEATURES[poi.id]
+    : DETAILED_POI_FEATURES[poi.id];
 }
 
 export function positionForRoom(room: string, floor: CampusFloorId) {

@@ -9,6 +9,8 @@ import {
   positionForRoom,
   detailedPlanForFloor,
   positionForDetailedPlan,
+  positionForOfficialPlan,
+  positionForPoi,
 } from '../lib/campus.ts';
 import { existsSync } from 'node:fs';
 import { applyMutation } from '../lib/actions.ts';
@@ -32,6 +34,60 @@ void test('the initial school catalog covers St. Clair Main Windsor floors and n
     ),
   );
   assert.ok(campus.pois.some((poi) => poi.name === 'SportsPlex'));
+});
+
+void test('overview room anchors come from individual labels, with no guessed fallback', () => {
+  const room = positionForOfficialPlan('A3302', 'third');
+  assert.ok(Math.abs(room.x - 51.1729) < 0.01);
+  assert.ok(Math.abs(room.y - 7.805) < 0.01);
+  assert.deepEqual(positionForOfficialPlan('a3302', 'third'), room);
+  assert.equal(positionForOfficialPlan('A3302', 'second'), undefined);
+  // These rooms are not individually labeled on the overview. A range endpoint
+  // or a nearby building must not be passed off as an exact room location.
+  for (const [room, floor] of [
+    ['A0336', 'basement'],
+    ['A2612', 'second'],
+    ['F3013', 'third'],
+    ['A9999', 'second'],
+  ]) {
+    assert.equal(positionForOfficialPlan(room, floor), undefined);
+  }
+});
+
+void test('POIs use the current drawing and shared building anchors stay co-located', () => {
+  const pois = campusById(DEFAULT_SCHOOL_ID).pois;
+  const position = (id, floor = 'campus') =>
+    positionForPoi(
+      pois.find((poi) => poi.id === id),
+      floor,
+    );
+  const sportsplex = position('sportsplex');
+  assert.ok(
+    sportsplex.x > 50 &&
+      sportsplex.x < 55 &&
+      sportsplex.y > 38 &&
+      sportsplex.y < 41,
+  );
+  assert.deepEqual(position('dental'), position('nursing'));
+  assert.match(position('dental').location, /building/);
+  assert.ok(
+    position('dental').y < 50,
+    'Toldo is above the Main Building on the overview',
+  );
+  assert.equal(
+    position('dental', 'first'),
+    undefined,
+    'Main Building drawing does not show Toldo rooms',
+  );
+  assert.equal(position('welcome', 'second'), undefined);
+  const library = position('library', 'second');
+  const room = positionForDetailedPlan('A2303', 'second');
+  assert.equal(library.x, room.x);
+  assert.equal(library.y, room.y);
+  assert.equal(
+    positionForPoi({ id: 'unverified', floor: 'first' }, 'campus'),
+    undefined,
+  );
 });
 
 void test('room codes resolve to floor and building pins', () => {
