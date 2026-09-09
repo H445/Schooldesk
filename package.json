@@ -86,6 +86,7 @@
       ]
     },
     "linux": {
+      "maintainer": "schooldesk@users.noreply.github.com",
       "category": "Education",
       "target": [
         "AppImage",
