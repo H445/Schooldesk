@@ -10,7 +10,7 @@ The packaged Schooldesk desktop app bundles Electron, including its own Node run
 
 Workspace data is stored locally on the device. No account, server, or network connection is required.
 
-Notes and classes can hold up to 20 references each. Paste an `http` or `https` link, or attach a local file, image, or PDF (up to 3 MB per file). Images and PDFs show an inline preview; other files have a download action. References stay in the local workspace and are included in the normal workspace export format.
+Notes and classes can hold as many references as needed. Paste an `http` or `https` link, or attach a local file, image, or PDF (up to 500 MB per file). Images and PDFs show an inline preview; other files have a download action. Reference metadata stays in the local workspace, while uploaded file bytes are stored locally in IndexedDB.
 
 Use the **References** page in the Workspace section to search and filter every attached item, see which class or note owns it, remove stale items, or add a new reference directly to a class or note.
 

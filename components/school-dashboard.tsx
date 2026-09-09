@@ -81,6 +81,13 @@ import {
   saveLocalMutation,
   type LocalWorkspace,
 } from '@/lib/local-workspace';
+import {
+  deleteReferenceAsset,
+  loadReferenceAsset,
+  MAX_REFERENCE_BYTES,
+  referenceAssetId,
+  storeReferenceAsset,
+} from '@/lib/reference-storage';
 
 type View =
   | 'Overview'
@@ -123,6 +130,16 @@ const shortDate = new Intl.DateTimeFormat('en-US', {
 });
 const dateLabel = (date: string) =>
   shortDate.format(new Date(date + 'T12:00:00'));
+function collectReferenceAssetIds(data: SchoolData) {
+  const ids = new Set<string>();
+  for (const owner of [...data.classes, ...data.notes]) {
+    for (const reference of owner.references ?? []) {
+      const assetId = referenceAssetId(reference.href);
+      if (assetId) ids.add(assetId);
+    }
+  }
+  return ids;
+}
 
 export default function SchoolDashboard() {
   const [workspace, setWorkspace] = useState(() => {
@@ -195,8 +212,14 @@ export default function SchoolDashboard() {
       setBusy(true);
       setError('');
       try {
+        const previousAssets = collectReferenceAssetIds(snapshot.current.data);
         const result = saveLocalMutation(snapshot.current, mutation);
         accept(result);
+        const nextAssets = collectReferenceAssetIds(result.data);
+        for (const assetId of previousAssets) {
+          if (!nextAssets.has(assetId))
+            void deleteReferenceAsset(assetId).catch(() => {});
+        }
         setToast(message);
         return result;
       } catch (e) {
@@ -1690,8 +1713,6 @@ function PagedItems<T>({
   );
 }
 
-const MAX_REFERENCE_BYTES = 3 * 1024 * 1024;
-
 function formatReferenceSize(size?: number) {
   if (!size) return '';
   return size < 1024 * 1024
@@ -1739,15 +1760,19 @@ function ReferencePreviewList({
           <span className="number-tag">{references.length}</span>
         </h3>
       </div>
-      <div className="reference-grid">
-        {references.map((reference) => (
-          <ReferencePreview
-            key={reference.id}
-            reference={reference}
-            onRemove={onRemove}
-          />
-        ))}
-      </div>
+      <PagedItems items={references} label="references">
+        {(visible) => (
+          <div className="reference-grid">
+            {visible.map((reference) => (
+              <ReferencePreview
+                key={reference.id}
+                reference={reference}
+                onRemove={onRemove}
+              />
+            ))}
+          </div>
+        )}
+      </PagedItems>
     </section>
   );
 }
@@ -1761,6 +1786,7 @@ function ReferencePreview({
   context?: string;
   onRemove?: (id: string) => void;
 }) {
+  const source = useReferenceSource(reference);
   const label =
     reference.kind === 'url'
       ? (() => {
@@ -1772,17 +1798,12 @@ function ReferencePreview({
         })()
       : `${reference.kind.toUpperCase()}${reference.size ? ` · ${formatReferenceSize(reference.size)}` : ''}`;
   const localPreview =
-    reference.kind === 'image' ? (
-      <img
-        className="reference-thumbnail"
-        src={reference.href}
-        alt=""
-        loading="lazy"
-      />
-    ) : reference.kind === 'pdf' ? (
+    reference.kind === 'image' && source ? (
+      <img className="reference-thumbnail" src={source} alt="" loading="lazy" />
+    ) : reference.kind === 'pdf' && source ? (
       <iframe
         className="reference-pdf-preview"
-        src={reference.href}
+        src={source}
         title={`Preview of ${reference.title}`}
       />
     ) : (
@@ -1812,15 +1833,15 @@ function ReferencePreview({
           >
             <ExternalLink size={15} />
           </a>
-        ) : (
+        ) : source ? (
           <a
-            href={reference.href}
+            href={source}
             download={reference.title}
             aria-label={`Download ${reference.title}`}
           >
             <Download size={15} />
           </a>
-        )}
+        ) : null}
         {onRemove && (
           <button
             type="button"
@@ -1835,16 +1856,50 @@ function ReferencePreview({
   );
 }
 
+function useReferenceSource(reference: Reference) {
+  const assetId = referenceAssetId(reference.href);
+  const [source, setSource] = useState(assetId ? '' : reference.href);
+  useEffect(() => {
+    let active = true;
+    let objectUrl = '';
+    if (!assetId) {
+      setSource(reference.href);
+      return () => {
+        active = false;
+      };
+    }
+    setSource('');
+    void loadReferenceAsset(assetId)
+      .then((blob) => {
+        if (!active || !blob) return;
+        objectUrl = URL.createObjectURL(blob);
+        setSource(objectUrl);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [assetId, reference.href]);
+  return source;
+}
+
 function ReferenceEditor({
   references,
   onChange,
+  onPendingChange,
 }: {
   references: Reference[];
   onChange: Dispatch<SetStateAction<Reference[]>>;
+  onPendingChange?: (pending: boolean) => void;
 }) {
   const [url, setUrl] = useState('');
   const [urlTitle, setUrlTitle] = useState('');
   const [fileError, setFileError] = useState('');
+  const [pending, setPending] = useState(0);
+  useEffect(() => {
+    onPendingChange?.(pending > 0);
+  }, [onPendingChange, pending]);
   const addUrl = () => {
     const value = url.trim();
     let parsed: URL;
@@ -1856,10 +1911,6 @@ function ReferenceEditor({
     }
     if (!['http:', 'https:'].includes(parsed.protocol)) {
       setFileError('Only http and https links can be added.');
-      return;
-    }
-    if (references.length >= 20) {
-      setFileError('You can add up to 20 references.');
       return;
     }
     onChange((current) => [
@@ -1880,48 +1931,57 @@ function ReferenceEditor({
     const files = [...(event.target.files ?? [])];
     event.currentTarget.value = '';
     if (!files.length) return;
-    if (references.length + files.length > 20) {
-      setFileError('You can add up to 20 references.');
-      return;
-    }
-    for (const file of files) {
-      if (file.size > MAX_REFERENCE_BYTES) {
-        setFileError(`${file.name} is larger than 3 MB.`);
-        continue;
-      }
-      const kind: ReferenceKind =
-        file.type === 'application/pdf'
-          ? 'pdf'
-          : file.type.startsWith('image/')
-            ? 'image'
-            : 'file';
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result !== 'string') return;
-        onChange((current) => [
-          ...current,
-          {
+    const accepted = files.filter((file) => file.size <= MAX_REFERENCE_BYTES);
+    const rejected = files.filter((file) => file.size > MAX_REFERENCE_BYTES);
+    setFileError(
+      rejected.length ? `${rejected[0].name} is larger than 500 MB.` : '',
+    );
+    if (!accepted.length) return;
+    setPending((count) => count + accepted.length);
+    void Promise.all(
+      accepted.map(async (file): Promise<Reference | undefined> => {
+        const assetId = crypto.randomUUID();
+        try {
+          await storeReferenceAsset(assetId, file);
+          const kind: ReferenceKind =
+            file.type === 'application/pdf'
+              ? 'pdf'
+              : file.type.startsWith('image/')
+                ? 'image'
+                : 'file';
+          return {
             id: crypto.randomUUID(),
             title: file.name,
             kind,
-            href: reader.result as string,
+            href: `asset:${assetId}`,
             mimeType: file.type || 'application/octet-stream',
             size: file.size,
             createdAt: new Date().toISOString(),
-          },
-        ]);
-      };
-      reader.onerror = () => setFileError(`Could not read ${file.name}.`);
-      reader.readAsDataURL(file);
-    }
-    if (!files.some((file) => file.size > MAX_REFERENCE_BYTES))
-      setFileError('');
+          } satisfies Reference;
+        } catch (error) {
+          setFileError(
+            error instanceof Error
+              ? error.message
+              : `Could not store ${file.name}.`,
+          );
+          return undefined;
+        } finally {
+          setPending((count) => Math.max(0, count - 1));
+        }
+      }),
+    ).then((added) => {
+      const referencesToAdd = added.filter(
+        (reference): reference is Reference => reference !== undefined,
+      );
+      if (referencesToAdd.length)
+        onChange((current) => [...current, ...referencesToAdd]);
+    });
   };
   return (
     <div className="reference-editor">
       <div className="field-label">
         <Paperclip size={15} /> References
-        <span>{references.length}/20</span>
+        <span>{references.length} attached</span>
       </div>
       <ReferencePreviewList
         references={references}
@@ -1949,7 +2009,7 @@ function ReferenceEditor({
           type="button"
           variant="outline"
           onClick={addUrl}
-          disabled={!url.trim() || references.length >= 20}
+          disabled={!url.trim() || pending > 0}
         >
           <Link2 size={15} /> Add link
         </Button>
@@ -1962,11 +2022,16 @@ function ReferenceEditor({
           multiple
           accept="*/*"
           onChange={addFiles}
-          disabled={references.length >= 20}
+          disabled={pending > 0}
         />
-        <small>Up to 3 MB each</small>
+        <small>Up to 500 MB each · stored locally</small>
       </label>
-      {fileError && <p className="form-error">{fileError}</p>}
+      {(fileError || pending > 0) && (
+        <p className="form-error">
+          {fileError ||
+            `Storing ${pending} attachment${pending === 1 ? '' : 's'}…`}
+        </p>
+      )}
     </div>
   );
 }
@@ -2000,6 +2065,7 @@ function ReferenceManagerForm({
   const [target, setTarget] = useState(firstTarget);
   const [references, setReferences] = useState<Reference[]>([]);
   const [formError, setFormError] = useState('');
+  const [referencesPending, setReferencesPending] = useState(false);
   useEffect(() => {
     if (!open) return;
     setTarget(firstTarget);
@@ -2038,7 +2104,11 @@ function ReferenceManagerForm({
           ))}
         </select>
       </label>
-      <ReferenceEditor references={references} onChange={setReferences} />
+      <ReferenceEditor
+        references={references}
+        onChange={setReferences}
+        onPendingChange={setReferencesPending}
+      />
       {(formError || error) && (
         <p role="alert" className="form-error">
           {formError || error}
@@ -2048,7 +2118,7 @@ function ReferenceManagerForm({
         <Button
           type="button"
           variant="outline"
-          disabled={busy}
+          disabled={busy || referencesPending}
           onClick={onCancel}
         >
           Cancel
@@ -2056,7 +2126,7 @@ function ReferenceManagerForm({
         <Button
           className="primary-button"
           type="submit"
-          disabled={busy || !target}
+          disabled={busy || referencesPending || !target}
         >
           {busy ? 'Saving…' : 'Save reference'}
         </Button>
@@ -2183,6 +2253,7 @@ function EditorForm({
   const [references, setReferences] = useState<Reference[]>(
     item?.references ?? [],
   );
+  const [referencesPending, setReferencesPending] = useState(false);
   const initialMeetings = schedulesFor(item || {});
   const [onCalendar, setOnCalendar] = useState(initialMeetings.length > 0);
   const [meetingRows, setMeetingRows] = useState<ClassSchedule[]>(
@@ -2219,7 +2290,7 @@ function EditorForm({
   };
   return (
     <form onSubmit={submit} className="editor-form">
-      <fieldset disabled={busy}>
+      <fieldset disabled={busy || referencesPending}>
         {editor.kind === 'classes' ? (
           <>
             <label>
@@ -2333,7 +2404,11 @@ function EditorForm({
                 ))}
               </div>
             </div>
-            <ReferenceEditor references={references} onChange={setReferences} />
+            <ReferenceEditor
+              references={references}
+              onChange={setReferences}
+              onPendingChange={setReferencesPending}
+            />
           </>
         ) : (
           <>
@@ -2423,6 +2498,7 @@ function EditorForm({
                 <ReferenceEditor
                   references={references}
                   onChange={setReferences}
+                  onPendingChange={setReferencesPending}
                 />
               </>
             )}
@@ -2440,7 +2516,7 @@ function EditorForm({
             type="button"
             variant="ghost"
             className="delete-button"
-            disabled={busy}
+            disabled={busy || referencesPending}
             onClick={onDelete}
           >
             <Trash2 size={15} />
@@ -2450,12 +2526,16 @@ function EditorForm({
         <Button
           type="button"
           variant="outline"
-          disabled={busy}
+          disabled={busy || referencesPending}
           onClick={onCancel}
         >
           Cancel
         </Button>
-        <Button className="primary-button" type="submit" disabled={busy}>
+        <Button
+          className="primary-button"
+          type="submit"
+          disabled={busy || referencesPending}
+        >
           {busy
             ? 'Saving…'
             : 'Save ' +

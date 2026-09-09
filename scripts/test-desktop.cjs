@@ -41,6 +41,7 @@ void app
         if (
           !details.url.startsWith('file://') &&
           !details.url.startsWith('data:') &&
+          !details.url.startsWith('blob:') &&
           !details.url.startsWith(
             'chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/',
           ) &&
@@ -51,6 +52,7 @@ void app
           cancel:
             !details.url.startsWith('file://') &&
             !details.url.startsWith('data:') &&
+            !details.url.startsWith('blob:') &&
             !details.url.startsWith(
               'chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/',
             ) &&
@@ -166,11 +168,40 @@ void app
         href: 'https://example.edu/guide',
         createdAt: new Date().toISOString(),
       },
+      {
+        id: 'asset',
+        title: 'Local asset.txt',
+        kind: 'file',
+        href: 'asset:smoke-asset',
+        mimeType: 'text/plain',
+        size: 2,
+        createdAt: new Date().toISOString(),
+      },
     ];
     await evaluate(
       (data) =>
         localStorage.setItem('schooldesk.workspace.v1', JSON.stringify(data)),
       withPreviews,
+    );
+    await evaluate(
+      () =>
+        new Promise((resolve, reject) => {
+          const request = indexedDB.open('schooldesk.reference-assets.v1', 1);
+          request.onupgradeneeded = () =>
+            request.result.createObjectStore('assets');
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => {
+            const transaction = request.result.transaction(
+              'assets',
+              'readwrite',
+            );
+            transaction
+              .objectStore('assets')
+              .put(new Blob(['Hi'], { type: 'text/plain' }), 'smoke-asset');
+            transaction.oncomplete = resolve;
+            transaction.onerror = () => reject(transaction.error);
+          };
+        }),
     );
     await window.loadFile(path.resolve('dist/client/index.html'));
     await waitFor(() => document.querySelector('.class-card'));
@@ -178,7 +209,13 @@ void app
     await waitFor(() => document.querySelector('.reference-section'));
     assert.equal(
       await evaluate(() => document.querySelectorAll('.reference-card').length),
-      3,
+      4,
+    );
+    await waitFor(() =>
+      document
+        .querySelector('a[download="Local asset.txt"]')
+        ?.getAttribute('href')
+        ?.startsWith('blob:'),
     );
     assert.equal(
       await evaluate(
@@ -201,7 +238,7 @@ void app
           document.querySelectorAll('.reference-manager-grid .reference-card')
             .length,
       ),
-      4,
+      5,
     );
     await clickLabel('New reference');
     await waitFor(() => document.querySelector('.reference-manager-dialog'));
@@ -213,11 +250,21 @@ void app
       ).set.call(url, 'https://example.edu/reading');
       url.dispatchEvent(new Event('input', { bubbles: true }));
       document.querySelector('.reference-add-row button').click();
+      const input = document.querySelector(
+        '.reference-file-picker input[type="file"]',
+      );
+      const transfer = new DataTransfer();
+      transfer.items.add(new File(['Hi'], 'Smoke.txt', { type: 'text/plain' }));
+      Object.defineProperty(input, 'files', {
+        configurable: true,
+        value: transfer.files,
+      });
+      input.dispatchEvent(new Event('change', { bubbles: true }));
     });
     await waitFor(
       () =>
         document.querySelectorAll('.reference-manager-dialog .reference-card')
-          .length === 1,
+          .length === 2,
     );
     await evaluate(() =>
       document.querySelector('.reference-manager-dialog form').requestSubmit(),
@@ -226,7 +273,7 @@ void app
     await waitFor(
       () =>
         document.querySelectorAll('.reference-manager-grid .reference-card')
-          .length === 5,
+          .length === 7,
     );
 
     const { performanceFixture } =

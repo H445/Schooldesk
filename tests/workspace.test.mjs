@@ -160,6 +160,15 @@ void test('classes and notes accept safe URL, image, PDF, and generic file refer
       size: 2,
       createdAt: '2026-09-08T12:00:00.000Z',
     },
+    {
+      id: 'asset',
+      title: 'Lecture recording.mp4',
+      kind: 'file',
+      href: 'asset:local-asset-1',
+      mimeType: 'video/mp4',
+      size: 500 * 1024 * 1024,
+      createdAt: '2026-09-08T12:00:00.000Z',
+    },
   ];
   let state = save(empty(), 'classes', { ...course, references });
   assert.deepEqual(state.classes[0].references, references);
@@ -173,7 +182,7 @@ void test('classes and notes accept safe URL, image, PDF, and generic file refer
   assert.equal(state.notes[0].references[0].href, references[0].href);
 });
 
-void test('references reject unsafe links, malformed uploads, and oversized lists', () => {
+void test('references reject unsafe links and oversized uploads', () => {
   for (const reference of [
     { id: 'x', title: 'Bad', kind: 'url', href: 'javascript:alert(1)' },
     { id: 'x', title: 'Bad', kind: 'url', href: 'not a url' },
@@ -196,16 +205,16 @@ void test('references reject unsafe links, malformed uploads, and oversized list
       save(empty(), 'classes', { ...course, references: [reference] }),
     );
   }
-  const tooMany = Array.from({ length: 21 }, (_, i) => ({
+  const many = Array.from({ length: 200 }, (_, i) => ({
     id: String(i),
     title: 'Link',
     kind: 'url',
     href: `https://example.com/${i}`,
   }));
-  assert.throws(() =>
-    save(empty(), 'classes', { ...course, references: tooMany }),
+  assert.doesNotThrow(() =>
+    save(empty(), 'classes', { ...course, references: many }),
   );
-  const tooLarge = `data:text/plain;base64,${'A'.repeat(4_500_000)}`;
+  const tooLarge = `data:text/plain;base64,AA==`;
   assert.throws(() =>
     save(empty(), 'classes', {
       ...course,
@@ -216,6 +225,7 @@ void test('references reject unsafe links, malformed uploads, and oversized list
           kind: 'file',
           href: tooLarge,
           mimeType: 'text/plain',
+          size: 500 * 1024 * 1024 + 1,
         },
       ],
     }),

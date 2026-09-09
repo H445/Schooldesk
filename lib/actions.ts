@@ -6,6 +6,7 @@ import type {
   Reference,
   ReferenceKind,
 } from './school';
+import { MAX_REFERENCE_BYTES, referenceAssetId } from './reference-storage.ts';
 export type Mutation = {
   action: 'save' | 'delete' | 'clearExamples';
   kind?: 'classes' | 'assignments' | 'notes';
@@ -17,8 +18,6 @@ const text = (v: unknown, name: string, max = 200, required = false) => {
     throw new Error(`Enter a valid ${name}${required ? ' (required)' : ''}.`);
   return v.trim();
 };
-const MAX_REFERENCES = 20;
-const MAX_REFERENCE_BYTES = 3 * 1024 * 1024;
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value))
     throw new Error('Invalid record.');
@@ -26,8 +25,7 @@ function record(value: unknown): Record<string, unknown> {
 }
 function validateReferences(input: unknown): Reference[] {
   if (input === undefined) return [];
-  if (!Array.isArray(input) || input.length > MAX_REFERENCES)
-    throw new Error(`Add up to ${MAX_REFERENCES} references.`);
+  if (!Array.isArray(input)) throw new Error('References must be a list.');
   return input.map((value) => {
     const r = record(value);
     const id = text(r.id, 'reference ID', 100, true);
@@ -43,6 +41,12 @@ function validateReferences(input: unknown): Reference[] {
     );
     const mimeType =
       r.mimeType === undefined ? undefined : text(r.mimeType, 'file type', 100);
+    const size = r.size === undefined ? undefined : Number(r.size);
+    if (
+      size !== undefined &&
+      (!Number.isSafeInteger(size) || size < 0 || size > MAX_REFERENCE_BYTES)
+    )
+      throw new Error('Reference file is too large.');
     if (kind === 'url') {
       let parsed: URL;
       try {
@@ -53,27 +57,27 @@ function validateReferences(input: unknown): Reference[] {
       if (!['http:', 'https:'].includes(parsed.protocol))
         throw new Error('Web links must use http or https.');
     } else {
-      if (!href.startsWith('data:'))
+      const assetId = referenceAssetId(href);
+      if (assetId) {
+        if (size === undefined)
+          throw new Error('Uploaded references need a file size.');
+      } else if (!href.startsWith('data:'))
         throw new Error('Uploaded references must contain local file data.');
-      const comma = href.indexOf(',');
-      const encoded = comma < 0 ? '' : href.slice(comma + 1);
-      if (
-        !comma ||
-        !encoded ||
-        encoded.length > Math.ceil(MAX_REFERENCE_BYTES * 1.4)
-      )
-        throw new Error('Reference file is too large.');
+      if (!assetId) {
+        const comma = href.indexOf(',');
+        const encoded = comma < 0 ? '' : href.slice(comma + 1);
+        if (
+          !comma ||
+          !encoded ||
+          encoded.length > Math.ceil(MAX_REFERENCE_BYTES * 1.4)
+        )
+          throw new Error('Reference file is too large.');
+      }
       if (kind === 'image' && !mimeType?.startsWith('image/'))
         throw new Error('Image references must be image files.');
       if (kind === 'pdf' && mimeType !== 'application/pdf')
         throw new Error('PDF references must be PDF files.');
     }
-    const size = r.size === undefined ? undefined : Number(r.size);
-    if (
-      size !== undefined &&
-      (!Number.isSafeInteger(size) || size < 0 || size > MAX_REFERENCE_BYTES)
-    )
-      throw new Error('Reference file is too large.');
     return {
       id,
       title,
