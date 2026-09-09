@@ -37,3 +37,7 @@ Run `npm install` once, then use `npm run desktop:test` to rebuild the offline r
 The desktop renderer uses a single Vite client build with relative asset paths. Lists display 60 records per page, and calendar cells show four meetings before linking to the full day's agenda. Search still covers all records and the complete text of notes. Saving keeps the existing local workspace format and reports success only after the local write succeeds.
 
 Tailwind sources in `app/globals.css` list the components used by this renderer, so the unused UI library does not add CSS to the desktop bundle. Add new renderer components to those sources when introducing them.
+
+### Releases
+
+Update the version in `package.json` and `package-lock.json`, commit it, and push a matching `vX.Y.Z` tag. The Desktop release workflow treats that matching tag as the confirmation, verifies the version, builds Windows, macOS, and Linux installers, and attaches them to the GitHub Release. A manual workflow run can repackage an existing confirmed tag.

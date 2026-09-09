@@ -1,14 +1,64 @@
 name: Desktop release
 
 on:
-  workflow_dispatch:
   push:
     tags:
       - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing confirmed version tag to package (for example, v1.2.3)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  NODE_VERSION: 22
 
 jobs:
+  verify:
+    name: Verify confirmed version
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - id: version
+        name: Check package and lockfile versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Expected a confirmed vX.Y.Z tag, received $tag" >&2
+            exit 1
+          fi
+          package_version="$(node -p "require('./package.json').version")"
+          lock_version="$(node -p "require('./package-lock.json').version")"
+          lock_package_version="$(node -p "require('./package-lock.json').packages[''].version")"
+          if [[ "v$package_version" != "$tag" || "$lock_version" != "$package_version" || "$lock_package_version" != "$package_version" ]]; then
+            echo "Tag $tag does not match package.json/package-lock.json version $package_version" >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$package_version" >> "$GITHUB_OUTPUT"
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm test
+
   package:
     name: ${{ matrix.os }} installer
+    needs: verify
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -22,14 +72,51 @@ jobs:
             platform: linux
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify.outputs.tag }}
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - run: npm ci
-      - run: npm run desktop:package -- --${{ matrix.platform }}
+      - run: npm run desktop:package -- --${{ matrix.platform }} --publish never
       - uses: actions/upload-artifact@v4
         with:
-          name: schooldesk-${{ matrix.platform }}
+          name: schooldesk-${{ matrix.platform }}-${{ needs.verify.outputs.version }}
           path: release/**
           if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release
+    needs:
+      - verify
+      - package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: schooldesk-*-${{ needs.verify.outputs.version }}
+          path: release
+          merge-multiple: true
+      - name: Create or update GitHub release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.verify.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --title "Schooldesk $RELEASE_TAG" \
+              --generate-notes
+          fi
+          mapfile -t assets < <(find release -type f -print)
+          if ((${#assets[@]} == 0)); then
+            echo 'No packaged release assets found.' >&2
+            exit 1
+          fi
+          gh release upload "$RELEASE_TAG" "${assets[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
