@@ -1,3 +1,5 @@
+import roomPositions from './campus-room-positions.json' with { type: 'json' };
+
 export type CampusFloorId =
   | 'campus'
   | 'basement'
@@ -72,6 +74,40 @@ export type CampusDefinition = {
 };
 
 export const DEFAULT_SCHOOL_ID = 'st-clair-windsor-main';
+
+export const detailedPlanSource =
+  'https://www.stclaircollege.ca/sites/default/files/inline-files/maps/maps-building-a-main.pdf';
+
+export function detailedPlanForFloor(floor: CampusFloorId) {
+  const page = {
+    campus: 0,
+    basement: 1,
+    first: 2,
+    second: 3,
+    third: 4,
+    fourth: 4,
+  }[floor];
+  return page
+    ? {
+        page,
+        image: `./main-building-page-${page}.png`,
+        pdf: `./main-building-detailed.pdf#page=${page}`,
+      }
+    : undefined;
+}
+
+/** Coordinates come from the room labels in the official drawing, never a guess. */
+export function positionForDetailedPlan(room: string, floor: CampusFloorId) {
+  const positions: Record<string, { page: number; x: number; y: number }> =
+    roomPositions;
+  const position = positions[room.toUpperCase()];
+  if (
+    position?.page !== detailedPlanForFloor(floor)?.page ||
+    floorForRoom(room) !== floor
+  )
+    return undefined;
+  return position;
+}
 
 export const campusFloors: CampusFloor[] = [
   {

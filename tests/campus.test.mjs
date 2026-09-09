@@ -7,7 +7,10 @@ import {
   floorForRoom,
   buildingForRoom,
   positionForRoom,
+  detailedPlanForFloor,
+  positionForDetailedPlan,
 } from '../lib/campus.ts';
+import { existsSync } from 'node:fs';
 import { applyMutation } from '../lib/actions.ts';
 
 void test('the initial school catalog covers St. Clair Main Windsor floors and navigation points', () => {
@@ -54,4 +57,34 @@ void test('school selection is validated and persists with workspace data', () =
   assert.throws(() =>
     applyMutation(initial, { action: 'setSchool', schoolId: 'unknown-school' }),
   );
+});
+
+void test('detailed drawings locate scheduled rooms on the correct floor without guessing', () => {
+  for (const [room, floor, page] of [
+    ['A2134', 'second', 3],
+    ['A2612', 'second', 3],
+    ['A3302', 'third', 4],
+    ['A0336', 'basement', 1],
+    ['A0341', 'basement', 1],
+  ]) {
+    const position = positionForDetailedPlan(room, floor);
+    assert.equal(position.page, page);
+    assert.ok(position.x > 0 && position.x < 100);
+    assert.ok(position.y > 0 && position.y < 100);
+    const plan = detailedPlanForFloor(floor);
+    assert.ok(
+      existsSync(new URL(`../public/${plan.image.slice(2)}`, import.meta.url)),
+    );
+  }
+  // These two labels occupy different wings in the official second-floor drawing.
+  assert.ok(
+    positionForDetailedPlan('A2134', 'second').x <
+      positionForDetailedPlan('A2612', 'second').x,
+  );
+  assert.equal(positionForDetailedPlan('A2134', 'first'), undefined);
+  assert.equal(positionForDetailedPlan('A9999', 'second'), undefined);
+  assert.equal(positionForDetailedPlan('F3013', 'third'), undefined);
+  assert.equal(positionForDetailedPlan('A4101', 'third'), undefined);
+  assert.equal(positionForDetailedPlan('A4101', 'fourth').page, 4);
+  assert.equal(detailedPlanForFloor('campus'), undefined);
 });

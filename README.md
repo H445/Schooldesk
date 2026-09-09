@@ -14,7 +14,9 @@ Notes and classes can hold as many references as needed. Paste an `http` or `htt
 
 Use the **References** page in the Workspace section to search and filter every attached item, see which class or note owns it, remove stale items, or add a new reference directly to a class or note.
 
-The **Campus** page includes a school selector, the bundled St. Clair College Main Windsor Campus floor plan with hallways, stairs, elevators, and room clusters, zoom controls, official room ranges, pins for class meeting rooms, and searchable points of interest such as Student Services, the library, food, health, parking, and the SportsPlex. The viewer links to St. Clair’s [official Main Windsor Campus Map](https://www.stclaircollege.ca/sites/default/files/campus-maps/windsor-campus-map.pdf) for current signage and construction updates.
+The **Campus** page uses one viewer for the campus overview and St. Clair’s [detailed Main Building drawings](https://www.stclaircollege.ca/sites/default/files/inline-files/maps/maps-building-a-main.pdf). Floor tabs load individual room and corridor plans (the third and fourth floors share a drawing). Class and POI pins on these drawings use extracted room-label coordinates; unlocated rooms stay in the lists instead of receiving guessed positions. Click empty map space or **Show all classes** to clear the class, POI, and floor selection. Zoom, room ranges, and links to the college’s other building and locker maps are available in the same view. The campus overview retains approximate orientation pins.
+
+The detailed PDF and four page renders are bundled for offline use. To regenerate them and `lib/campus-room-positions.json` after replacing `public/main-building-detailed.pdf`, run `python scripts/prepare-campus-plans.py` with `pdfplumber` installed and Poppler’s `pdftoppm` on PATH. The source PDF downloaded on September 9, 2026 has an April 16, 2026 creation date.
 
 ## Desktop app
 

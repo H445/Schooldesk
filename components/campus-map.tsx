@@ -24,6 +24,9 @@ import {
   campusById,
   campusFloors,
   DEFAULT_SCHOOL_ID,
+  detailedPlanForFloor,
+  detailedPlanSource,
+  positionForDetailedPlan,
   extractRoomCode,
   floorForRoom,
   positionForOfficialPlan,
@@ -119,6 +122,7 @@ function OfficialFloorPlanViewer({
   visiblePinCount,
   onSelectClass,
   onSelectPoi,
+  onClearSelection,
 }: {
   source: string;
   officialSource: string;
@@ -131,10 +135,20 @@ function OfficialFloorPlanViewer({
   visiblePinCount: number;
   onSelectClass: (course: Course, floor: CampusFloorId) => void;
   onSelectPoi: (id: string) => void;
+  onClearSelection: () => void;
 }) {
   const [zoomIndex, setZoomIndex] = useState(0);
   const zoom = PDF_ZOOMS[zoomIndex];
   const showLabels = zoom >= 150;
+  const detailedPlan = detailedPlanForFloor(selectedFloor);
+  const mapPins = detailedPlan
+    ? pins.filter((pin) => positionForDetailedPlan(pin.room, selectedFloor))
+    : pins;
+  const mapPois = detailedPlan
+    ? pois.filter(
+        (poi) => poi.room && positionForDetailedPlan(poi.room, selectedFloor),
+      )
+    : pois;
   return (
     <section className="panel actual-floorplan">
       <div className="actual-floorplan-heading">
@@ -142,14 +156,18 @@ function OfficialFloorPlanViewer({
           <span className="eyebrow">Official plan</span>
           <h2>Hallways and room layout</h2>
           <p>
-            {activeFloor.description} Classes and campus points are pinned
-            directly on this room and hallway layout so they stay aligned as you
-            zoom and scroll.
+            {detailedPlan
+              ? 'Main Building: individual rooms, corridors, washrooms, and exits from the college’s detailed drawings.'
+              : 'Campus overview. Select a floor to see the Main Building’s detailed room and corridor plan.'}{' '}
+            Click an empty area of the map to show all classes again.
           </p>
           <div className="floorplan-overlay-summary">
             <strong>{activeFloor.label}</strong>
             <span>
-              {visiblePinCount} room pin{visiblePinCount === 1 ? '' : 's'}
+              {detailedPlan ? mapPins.length : visiblePinCount} room pin
+              {(detailedPlan ? mapPins.length : visiblePinCount) === 1
+                ? ''
+                : 's'}
             </span>
             <span>
               <i className="floorplan-legend-dot class" /> Your classes
@@ -160,6 +178,9 @@ function OfficialFloorPlanViewer({
           </div>
         </div>
         <div className="actual-floorplan-actions">
+          {(selectedClassId || selectedPoiId || selectedFloor !== 'campus') && (
+            <button onClick={onClearSelection}>Show all classes</button>
+          )}
           <span aria-live="polite">{zoom}%</span>
           <button
             aria-label="Zoom out floor plan"
@@ -184,7 +205,11 @@ function OfficialFloorPlanViewer({
           >
             <RotateCcw size={15} />
           </button>
-          <a href={officialSource} target="_blank" rel="noreferrer">
+          <a
+            href={detailedPlan?.pdf ?? officialSource}
+            target="_blank"
+            rel="noreferrer"
+          >
             <ExternalLink size={14} />
             Open PDF
           </a>
@@ -197,8 +222,12 @@ function OfficialFloorPlanViewer({
             style={{ width: `${zoom}%` }}
           >
             <img
-              src={source}
-              alt="Official St. Clair College Main Windsor Campus floor plan"
+              src={detailedPlan?.image ?? source}
+              alt={
+                detailedPlan
+                  ? `Main Building detailed plan — ${activeFloor.label}`
+                  : 'Official St. Clair College Main Windsor Campus floor plan'
+              }
               draggable={false}
             />
             <svg
@@ -207,8 +236,20 @@ function OfficialFloorPlanViewer({
               preserveAspectRatio="none"
               aria-label="Class and point-of-interest overlays"
             >
-              {pois.map((poi) => {
-                const position = officialPlanPositionForPoi(poi);
+              <a
+                href="#all-campus-classes"
+                aria-label="Clear map selection and show all classes"
+                onClick={(event) => {
+                  event.preventDefault();
+                  onClearSelection();
+                }}
+              >
+                <rect width="100" height="100" fill="transparent" />
+              </a>
+              {mapPois.map((poi) => {
+                const position = detailedPlan
+                  ? positionForDetailedPlan(poi.room!, selectedFloor)!
+                  : officialPlanPositionForPoi(poi);
                 const selected = poi.id === selectedPoiId;
                 const floorActive =
                   selectedFloor === 'campus' || poi.floor === selectedFloor;
@@ -242,8 +283,10 @@ function OfficialFloorPlanViewer({
                   </a>
                 );
               })}
-              {pins.map((pin) => {
-                const position = positionForOfficialPlan(pin.room, pin.floor);
+              {mapPins.map((pin) => {
+                const position = detailedPlan
+                  ? positionForDetailedPlan(pin.room, selectedFloor)!
+                  : positionForOfficialPlan(pin.room, pin.floor);
                 const active = pin.courses.some(
                   (course) => course.id === selectedClassId,
                 );
@@ -260,6 +303,13 @@ function OfficialFloorPlanViewer({
                       onSelectClass(pin.courses[0], pin.floor);
                     }}
                   >
+                    <rect
+                      x={position.x - 1.6}
+                      y={position.y - 3}
+                      width={detailedPlan || showLabels || active ? 10 : 3.2}
+                      height="4.7"
+                      fill="transparent"
+                    />
                     <circle
                       cx={position.x}
                       cy={position.y}
@@ -280,7 +330,7 @@ function OfficialFloorPlanViewer({
                     >
                       {pin.courses.length}
                     </text>
-                    {(showLabels || active) && (
+                    {(detailedPlan || showLabels || active) && (
                       <text
                         x={position.x + 1.9}
                         y={position.y - 1.2}
@@ -298,9 +348,41 @@ function OfficialFloorPlanViewer({
         </div>
       </div>
       <p className="actual-floorplan-caption">
-        Scroll inside the plan to pan across the one-page layout. The source PDF
-        remains available for printing and full-resolution room labels.
+        {detailedPlan
+          ? 'Pins use room-label positions from this drawing. Rooms absent from the drawing remain in the class list. Third and fourth floors share one drawing.'
+          : 'Overview pins are approximate. Select a floor for room-level positions.'}{' '}
+        Scroll to pan; open the PDF for full-resolution labels.
       </p>
+      <nav
+        className="campus-plan-sources"
+        aria-label="Detailed campus plan sources"
+      >
+        <span>More official plans:</span>
+        <a href={detailedPlanSource} target="_blank" rel="noreferrer">
+          Main Building
+        </a>
+        <a
+          href="https://www.stclaircollege.ca/sites/default/files/inline-files/maps/maps-building-b-fcem.pdf"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Ford Centre
+        </a>
+        <a
+          href="https://www.stclaircollege.ca/sites/default/files/inline-files/maps/maps-building-f-toldo.pdf"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Health Sciences
+        </a>
+        <a
+          href="https://www.stclaircollege.ca/student-services/on-campus-services"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Locker maps by floor
+        </a>
+      </nav>
     </section>
   );
 }
@@ -392,6 +474,7 @@ export default function CampusMap({
       </div>
 
       <OfficialFloorPlanViewer
+        key={selectedFloor}
         source={campus.localMapImagePath}
         officialSource={campus.mapUrl}
         pins={pins}
@@ -403,6 +486,11 @@ export default function CampusMap({
         visiblePinCount={visiblePins.length}
         onSelectClass={selectClass}
         onSelectPoi={(id) => setSelectedPoiId(id)}
+        onClearSelection={() => {
+          onSelectClass('');
+          setSelectedPoiId('');
+          setSelectedFloor('campus');
+        }}
       />
 
       <div className="campus-details campus-details-unified">
