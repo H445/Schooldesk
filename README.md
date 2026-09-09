@@ -4,7 +4,9 @@ A personal school workspace for classes, assignments, notes, and deadlines.
 
 ## Development
 
-Requires Node 22.13 or newer. Install with `npm install`.
+Building from source requires Node 22.13 or newer. Install the development dependencies with `npm install`.
+
+The packaged Schooldesk desktop app bundles Electron, including its own Node runtime. People installing a Windows, macOS, or Linux release do not need Node.js or npm installed.
 
 Workspace data is stored locally on the device. No account, server, or network connection is required.
 
