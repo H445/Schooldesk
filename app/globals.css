@@ -1,6 +1,13 @@
-@import 'tailwindcss';
+@import 'tailwindcss' source(none);
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
+/* Only these components are shipped by the desktop renderer. */
+@source '../index.html';
+@source '../components/school-dashboard.tsx';
+@source '../components/ui/button.tsx';
+@source '../components/ui/input.tsx';
+@source '../components/ui/textarea.tsx';
+@source '../components/ui/dialog.tsx';
 @custom-variant dark (&:where(.dark, .dark *));
 @theme inline {
   --color-background: var(--background);
@@ -106,6 +113,15 @@ button:hover {
 }
 .app-shell {
   min-height: 100vh;
+}
+.list-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px;
+  color: var(--muted-foreground);
 }
 .sidebar {
   position: fixed;
@@ -793,6 +809,11 @@ h1 {
   margin-top: 15px;
   margin-bottom: 6px;
 }
+.class-card-bottom-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
 .class-progress {
   height: 4px;
   border-radius: 5px;
@@ -1479,6 +1500,13 @@ select:focus-visible {
   margin-top: 22px;
   padding-top: 15px;
 }
+.reference-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--link);
+  white-space: nowrap;
+}
 .kanban-board {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2104,6 +2132,146 @@ textarea:focus-visible {
   display: block;
   color: var(--muted-foreground);
   font-size: 0.875rem;
+}
+.reference-section {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 22px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.reference-section-heading h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 1rem;
+  font-weight: 550;
+}
+.reference-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+.reference-card {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-raised);
+}
+.reference-card-body {
+  display: grid;
+  align-content: center;
+  min-width: 0;
+  gap: 3px;
+  padding: 10px;
+  flex: 1;
+}
+.reference-card-body strong,
+.reference-card-body small,
+.reference-card-body p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reference-card-body strong {
+  font-size: 0.875rem;
+}
+.reference-card-body small {
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+}
+.reference-card-body p {
+  margin-top: 3px;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+}
+.reference-file-icon,
+.reference-thumbnail,
+.reference-pdf-preview {
+  display: grid;
+  place-items: center;
+  width: 68px;
+  min-height: 68px;
+  flex: 0 0 68px;
+  background: var(--surface-hover);
+  color: var(--link);
+}
+.reference-thumbnail {
+  object-fit: cover;
+}
+.reference-pdf-preview {
+  border: 0;
+}
+.reference-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+}
+.reference-card-actions a,
+.reference-card-actions button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted-foreground);
+}
+.reference-card-actions a:hover,
+.reference-card-actions button:hover {
+  background: var(--surface-hover);
+  color: var(--foreground);
+}
+.reference-editor {
+  display: grid;
+  gap: 12px;
+  padding-top: 6px;
+}
+.reference-editor > .reference-section {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.reference-add-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 8px;
+}
+.reference-add-row button {
+  white-space: nowrap;
+}
+.reference-file-picker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  width: fit-content;
+  padding: 9px 11px;
+  border: 1px dashed var(--border);
+  border-radius: 7px;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+.reference-file-picker:hover {
+  border-color: var(--ring);
+  color: var(--foreground);
+}
+.reference-file-picker input {
+  display: none;
+}
+.reference-file-picker small {
+  color: var(--muted-foreground);
 }
 .calendar-meeting {
   border-left-style: double;

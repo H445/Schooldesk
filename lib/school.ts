@@ -6,13 +6,23 @@ export type ClassSchedule = {
   endDate: string;
   location?: string;
 };
+export type ReferenceKind = 'url' | 'file' | 'image' | 'pdf';
+export type Reference = {
+  id: string;
+  title: string;
+  kind: ReferenceKind;
+  href: string;
+  mimeType?: string;
+  size?: number;
+  description?: string;
+  createdAt: string;
+};
 export const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export function meetsOn(course: Course, date: string) {
+  const weekday = new Date(date + 'T12:00:00').getDay();
   return schedulesFor(course).some(
     (s) =>
-      date >= s.startDate &&
-      date <= s.endDate &&
-      s.weekdays.includes(new Date(date + 'T12:00:00').getDay()),
+      date >= s.startDate && date <= s.endDate && s.weekdays.includes(weekday),
   );
 }
 export function schedulesFor(course: Partial<Course>) {
@@ -22,17 +32,22 @@ export function schedulesFor(course: Partial<Course>) {
   );
 }
 export function meetingsOn(courses: Course[], date: string): Course[] {
-  return courses
-    .flatMap((c) =>
-      schedulesFor(c)
-        .filter((s) => meetsOn({ ...c, calendarSchedules: [s] }, date))
-        .map((s) => ({ ...c, calendarSchedule: s })),
-    )
-    .sort((a, b) =>
-      a.calendarSchedule!.startTime.localeCompare(
-        b.calendarSchedule!.startTime,
-      ),
-    );
+  const weekday = new Date(date + 'T12:00:00').getDay();
+  const meetings: Course[] = [];
+  for (const course of courses) {
+    for (const schedule of schedulesFor(course)) {
+      if (
+        date >= schedule.startDate &&
+        date <= schedule.endDate &&
+        schedule.weekdays.includes(weekday)
+      ) {
+        meetings.push({ ...course, calendarSchedule: schedule });
+      }
+    }
+  }
+  return meetings.sort((a, b) =>
+    a.calendarSchedule!.startTime.localeCompare(b.calendarSchedule!.startTime),
+  );
 }
 export function classScheduleLabel(course: Course) {
   const schedules = schedulesFor(course);
@@ -55,6 +70,7 @@ export type Course = {
   calendarSchedules?: ClassSchedule[];
   color: string;
   example?: boolean;
+  references?: Reference[];
 };
 export type Assignment = {
   id: string;
@@ -73,6 +89,7 @@ export type Note = {
   content: string;
   updatedAt: string;
   example?: boolean;
+  references?: Reference[];
 };
 export type SchoolData = {
   classes: Course[];

@@ -2,6 +2,22 @@ import { applyMutation, type Mutation } from './actions.ts';
 import { makeOfflineWorkspace, type SchoolData } from './school.ts';
 
 const STORAGE_KEY = 'schooldesk.workspace.v1';
+// Mutations preserve unchanged arrays. Reuse their serialized form, so
+// completing an assignment does not re-encode every note on the device.
+const serializedCollections = new WeakMap<object, string>();
+function serializeCollection(collection: SchoolData[keyof SchoolData]) {
+  let serialized = serializedCollections.get(collection);
+  if (serialized === undefined) {
+    serialized = JSON.stringify(collection);
+    serializedCollections.set(collection, serialized);
+  }
+  return serialized;
+}
+
+export function serializeWorkspace(workspace: LocalWorkspace) {
+  const { classes, assignments, notes } = workspace.data;
+  return `{"data":{"classes":${serializeCollection(classes)},"assignments":${serializeCollection(assignments)},"notes":${serializeCollection(notes)}},"revision":${workspace.revision}}`;
+}
 
 export type LocalWorkspace = { data: SchoolData; revision: number };
 
@@ -45,6 +61,6 @@ export function saveLocalMutation(
     data: applyMutation(current.data, mutation),
     revision: current.revision + 1,
   };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  localStorage.setItem(STORAGE_KEY, serializeWorkspace(next));
   return next;
 }

@@ -123,3 +123,101 @@ test('assignment deletion affects only the selected record', () => {
     ['other'],
   );
 });
+
+void test('classes and notes accept safe URL, image, PDF, and generic file references', () => {
+  const references = [
+    {
+      id: 'url',
+      title: 'Course guide',
+      kind: 'url',
+      href: 'https://example.edu/guide',
+      createdAt: '2026-09-08T12:00:00.000Z',
+    },
+    {
+      id: 'image',
+      title: 'Diagram.png',
+      kind: 'image',
+      href: 'data:image/png;base64,AA==',
+      mimeType: 'image/png',
+      size: 1,
+      createdAt: '2026-09-08T12:00:00.000Z',
+    },
+    {
+      id: 'pdf',
+      title: 'Syllabus.pdf',
+      kind: 'pdf',
+      href: 'data:application/pdf;base64,AA==',
+      mimeType: 'application/pdf',
+      size: 1,
+      createdAt: '2026-09-08T12:00:00.000Z',
+    },
+    {
+      id: 'file',
+      title: 'Formula.txt',
+      kind: 'file',
+      href: 'data:text/plain;base64,SGk=',
+      mimeType: 'text/plain',
+      size: 2,
+      createdAt: '2026-09-08T12:00:00.000Z',
+    },
+  ];
+  let state = save(empty(), 'classes', { ...course, references });
+  assert.deepEqual(state.classes[0].references, references);
+  state = save(state, 'notes', {
+    id: 'reference-note',
+    title: 'Readings',
+    classId: course.id,
+    content: '',
+    references: [references[0]],
+  });
+  assert.equal(state.notes[0].references[0].href, references[0].href);
+});
+
+void test('references reject unsafe links, malformed uploads, and oversized lists', () => {
+  for (const reference of [
+    { id: 'x', title: 'Bad', kind: 'url', href: 'javascript:alert(1)' },
+    { id: 'x', title: 'Bad', kind: 'url', href: 'not a url' },
+    {
+      id: 'x',
+      title: 'Bad',
+      kind: 'image',
+      href: 'https://example.com/a.png',
+      mimeType: 'image/png',
+    },
+    {
+      id: 'x',
+      title: 'Bad',
+      kind: 'pdf',
+      href: 'data:application/pdf;base64,AA==',
+      mimeType: 'text/plain',
+    },
+  ]) {
+    assert.throws(() =>
+      save(empty(), 'classes', { ...course, references: [reference] }),
+    );
+  }
+  const tooMany = Array.from({ length: 21 }, (_, i) => ({
+    id: String(i),
+    title: 'Link',
+    kind: 'url',
+    href: `https://example.com/${i}`,
+  }));
+  assert.throws(() =>
+    save(empty(), 'classes', { ...course, references: tooMany }),
+  );
+  const tooLarge = `data:text/plain;base64,${'A'.repeat(4_500_000)}`;
+  assert.throws(() =>
+    save(empty(), 'classes', {
+      ...course,
+      references: [
+        {
+          id: 'large',
+          title: 'Large',
+          kind: 'file',
+          href: tooLarge,
+          mimeType: 'text/plain',
+        },
+      ],
+    }),
+  );
+});

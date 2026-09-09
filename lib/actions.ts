@@ -1,4 +1,11 @@
-import type { SchoolData, Course, Assignment, Note } from './school';
+import type {
+  SchoolData,
+  Course,
+  Assignment,
+  Note,
+  Reference,
+  ReferenceKind,
+} from './school';
 export type Mutation = {
   action: 'save' | 'delete' | 'clearExamples';
   kind?: 'classes' | 'assignments' | 'notes';
@@ -10,14 +17,87 @@ const text = (v: unknown, name: string, max = 200, required = false) => {
     throw new Error(`Enter a valid ${name}${required ? ' (required)' : ''}.`);
   return v.trim();
 };
+const MAX_REFERENCES = 20;
+const MAX_REFERENCE_BYTES = 3 * 1024 * 1024;
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value))
     throw new Error('Invalid record.');
   return value as Record<string, unknown>;
 }
+function validateReferences(input: unknown): Reference[] {
+  if (input === undefined) return [];
+  if (!Array.isArray(input) || input.length > MAX_REFERENCES)
+    throw new Error(`Add up to ${MAX_REFERENCES} references.`);
+  return input.map((value) => {
+    const r = record(value);
+    const id = text(r.id, 'reference ID', 100, true);
+    const title = text(r.title, 'reference title', 180, true);
+    const kind = text(r.kind, 'reference type', 10, true) as ReferenceKind;
+    if (!['url', 'file', 'image', 'pdf'].includes(kind))
+      throw new Error('Choose a valid reference type.');
+    const href = text(
+      r.href,
+      'reference link',
+      kind === 'url' ? 2_000 : Math.ceil(MAX_REFERENCE_BYTES * 1.4) + 128,
+      true,
+    );
+    const mimeType =
+      r.mimeType === undefined ? undefined : text(r.mimeType, 'file type', 100);
+    if (kind === 'url') {
+      let parsed: URL;
+      try {
+        parsed = new URL(href);
+      } catch {
+        throw new Error('Enter a valid web link.');
+      }
+      if (!['http:', 'https:'].includes(parsed.protocol))
+        throw new Error('Web links must use http or https.');
+    } else {
+      if (!href.startsWith('data:'))
+        throw new Error('Uploaded references must contain local file data.');
+      const comma = href.indexOf(',');
+      const encoded = comma < 0 ? '' : href.slice(comma + 1);
+      if (
+        !comma ||
+        !encoded ||
+        encoded.length > Math.ceil(MAX_REFERENCE_BYTES * 1.4)
+      )
+        throw new Error('Reference file is too large.');
+      if (kind === 'image' && !mimeType?.startsWith('image/'))
+        throw new Error('Image references must be image files.');
+      if (kind === 'pdf' && mimeType !== 'application/pdf')
+        throw new Error('PDF references must be PDF files.');
+    }
+    const size = r.size === undefined ? undefined : Number(r.size);
+    if (
+      size !== undefined &&
+      (!Number.isSafeInteger(size) || size < 0 || size > MAX_REFERENCE_BYTES)
+    )
+      throw new Error('Reference file is too large.');
+    return {
+      id,
+      title,
+      kind,
+      href,
+      ...(mimeType === undefined ? {} : { mimeType }),
+      ...(size === undefined ? {} : { size }),
+      ...(r.description === undefined
+        ? {}
+        : { description: text(r.description, 'reference description', 400) }),
+      createdAt: text(
+        r.createdAt ?? new Date().toISOString(),
+        'reference date',
+        40,
+        true,
+      ),
+    };
+  });
+}
 export function applyMutation(current: SchoolData, input: unknown): SchoolData {
   const m = record(input);
-  const d = structuredClone(current);
+  // Preserve untouched records so large notes are not copied on every save
+  // and derived UI caches stay valid for unchanged collections.
+  const d = { ...current };
   if (m.action === 'clearExamples') {
     const keepClasses = new Set(
       [...d.assignments, ...d.notes]
@@ -91,6 +171,10 @@ export function applyMutation(current: SchoolData, input: unknown): SchoolData {
       calendarSchedule: calendarSchedules[0] ?? null,
       calendarSchedules,
       color,
+      references:
+        r.references === undefined
+          ? (prior?.references ?? [])
+          : validateReferences(r.references),
       example: false,
     };
   } else if (kind === 'assignments') {
@@ -115,6 +199,8 @@ export function applyMutation(current: SchoolData, input: unknown): SchoolData {
       priority: r.priority as Assignment['priority'],
       status: r.status as Assignment['status'],
       description: text(r.description ?? '', 'description', 10000),
+      // Assignments do not own references; keeping this branch explicit makes
+      // the supported attachment targets clear.
       example: false,
     };
   } else
@@ -123,6 +209,10 @@ export function applyMutation(current: SchoolData, input: unknown): SchoolData {
       title: text(r.title, 'note title', 200, true),
       classId,
       content: text(r.content ?? '', 'note', 50000),
+      references:
+        r.references === undefined
+          ? ((previous as Note | undefined)?.references ?? [])
+          : validateReferences(r.references),
       updatedAt: new Date().toISOString(),
       example: false,
     };
@@ -174,7 +264,7 @@ function validateSchedule(input: unknown): Course['calendarSchedule'] {
   if (endDate < startDate)
     throw new Error('Last date must be on or after the first date.');
   return {
-    weekdays: [...new Set(s.weekdays as number[])].sort(),
+    weekdays: [...new Set(s.weekdays as number[])].sort((a, b) => a - b),
     startTime,
     endTime,
     startDate,

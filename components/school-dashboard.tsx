@@ -2,10 +2,16 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
+  type ChangeEvent,
+  type Dispatch,
   type FormEvent,
+  type MouseEvent,
+  type ReactNode,
+  type SetStateAction,
 } from 'react';
 import {
   ArrowDown,
@@ -18,13 +24,19 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
+  Download,
+  ExternalLink,
+  File,
+  FileImage,
   FileText,
   GraduationCap,
   LayoutDashboard,
   List,
   ListTodo,
+  Link2,
   Columns3,
   Pencil,
+  Paperclip,
   Plus,
   Search,
   Sparkles,
@@ -53,9 +65,17 @@ import {
   type Course,
   type Assignment,
   type Note,
+  type Reference,
+  type ReferenceKind,
   type SchoolData,
 } from '@/lib/school';
 import type { Mutation } from '@/lib/actions';
+import {
+  indexCourses,
+  summarizeAssignments,
+  filterAssignments,
+  filterNotes,
+} from '@/lib/workspace-index';
 import {
   loadLocalWorkspace,
   saveLocalMutation,
@@ -83,22 +103,35 @@ const colors = [
   '#d57790',
   '#737d91',
 ];
+const shortDate = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+});
 const dateLabel = (date: string) =>
-  new Date(date + 'T12:00:00').toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  });
+  shortDate.format(new Date(date + 'T12:00:00'));
 
 export default function SchoolDashboard() {
-  const [data, setData] = useState<SchoolData>(makeOfflineWorkspace);
-  const snapshot = useRef<LocalWorkspace>({
-    data: makeOfflineWorkspace(),
-    revision: 0,
+  const [workspace, setWorkspace] = useState(() => {
+    try {
+      return { ...loadLocalWorkspace(), loaded: true, error: '' };
+    } catch (e) {
+      return {
+        data: makeOfflineWorkspace(),
+        revision: 0,
+        loaded: false,
+        error:
+          e instanceof Error ? e.message : 'Unable to load your workspace.',
+      };
+    }
   });
-  const [loaded, setLoaded] = useState(false);
+  const { data, loaded, error } = workspace;
+  const snapshot = useRef<LocalWorkspace>(workspace);
+  const setError = useCallback(
+    (error: string) => setWorkspace((current) => ({ ...current, error })),
+    [],
+  );
   const [busy, setBusy] = useState(false);
   const lock = useRef(false);
-  const [error, setError] = useState('');
   const [toast, setToast] = useState('');
   const [view, setView] = useState<View>('Overview');
   const [classId, setClassId] = useState('');
@@ -119,7 +152,7 @@ export default function SchoolDashboard() {
   const accept = useCallback(
     (result: { data: SchoolData; revision: number }) => {
       snapshot.current = result;
-      setData(result.data);
+      setWorkspace({ ...result, loaded: true, error: '' });
     },
     [],
   );
@@ -128,16 +161,12 @@ export default function SchoolDashboard() {
     try {
       const result = loadLocalWorkspace();
       accept(result);
-      setLoaded(true);
     } catch (e) {
       setError(
         e instanceof Error ? e.message : 'Unable to load your workspace.',
       );
     }
-  }, [accept]);
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+  }, [accept, setError]);
   useEffect(() => {
     if (!toast) return;
     const timer = setTimeout(() => setToast(''), 3500);
@@ -162,7 +191,7 @@ export default function SchoolDashboard() {
         setBusy(false);
       }
     },
-    [accept],
+    [accept, setError],
   );
   const act = (m: Mutation, message?: string) => {
     void mutate(m, message).catch(() => {});
@@ -189,49 +218,99 @@ export default function SchoolDashboard() {
       },
       a.status === 'Done' ? 'Assignment reopened' : 'Assignment completed',
     );
-  const activeClass = data.classes.find((c) => c.id === classId);
-  const matches = (...values: (string | undefined)[]) =>
-    values.some((v) => v?.toLowerCase().includes(query.toLowerCase().trim()));
-  const classMatches = (id: string) => !classId || id === classId;
-  const assignments = data.assignments
-    .filter(
-      (a) =>
-        classMatches(a.classId) &&
-        matches(
-          a.title,
-          a.description,
-          data.classes.find((c) => c.id === a.classId)?.name,
-        ) &&
-        (statusFilter === 'All' ||
-          (statusFilter === 'Overdue'
-            ? a.status !== 'Done' && a.dueDate < today
-            : a.status === statusFilter)),
-    )
-    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-  const notes = data.notes
-    .filter(
-      (n) =>
-        classMatches(n.classId) &&
-        matches(
-          n.title,
-          n.content,
-          data.classes.find((c) => c.id === n.classId)?.name,
-        ),
-    )
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  const classes = data.classes.filter((c) =>
-    matches(c.name, c.code, c.teacher),
+  const courseIndex = useMemo(() => indexCourses(data.classes), [data.classes]);
+  const activeClass = courseIndex.get(classId);
+  const search = query.toLowerCase().trim();
+  const sortedAssignments = useMemo(
+    () =>
+      [...data.assignments].sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
+    [data.assignments],
   );
-  const completed = data.assignments.filter((a) => a.status === 'Done').length;
+  const sortedNotes = useMemo(
+    () =>
+      [...data.notes].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    [data.notes],
+  );
+  const assignments = useMemo(
+    () =>
+      filterAssignments(
+        sortedAssignments,
+        courseIndex,
+        search,
+        classId,
+        statusFilter,
+        today,
+      ),
+    [sortedAssignments, courseIndex, search, classId, statusFilter, today],
+  );
+  const notes = useMemo(
+    () => filterNotes(sortedNotes, courseIndex, search, classId),
+    [sortedNotes, courseIndex, search, classId],
+  );
+  const classes = useMemo(
+    () =>
+      data.classes.filter(
+        (c) =>
+          !search ||
+          [c.name, c.code, c.teacher].some((v) =>
+            v.toLowerCase().includes(search),
+          ),
+      ),
+    [data.classes, search],
+  );
+  const calendarCourses = useMemo(
+    () =>
+      data.classes.filter(
+        (c) =>
+          (!classId || c.id === classId) &&
+          (!search ||
+            [c.name, c.code, c.schedule].some((v) =>
+              v.toLowerCase().includes(search),
+            )),
+      ),
+    [data.classes, classId, search],
+  );
+  const calendarMeetings = useMemo(() => {
+    const days = new Map<string, Course[]>();
+    if (view !== 'Calendar') return days;
+    const count =
+      Math.ceil(
+        (month.getDay() +
+          new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate()) /
+          7,
+      ) * 7;
+    for (let i = 0; i < count; i++) {
+      const day = localDate(
+        new Date(month.getFullYear(), month.getMonth(), i - month.getDay() + 1),
+      );
+      days.set(day, meetingsOn(calendarCourses, day));
+    }
+    return days;
+  }, [view, month, calendarCourses]);
+  const totals = useMemo(
+    () => summarizeAssignments(data.assignments),
+    [data.assignments],
+  );
+  const filteredTotals = useMemo(
+    () => summarizeAssignments(assignments),
+    [assignments],
+  );
+  const completed = totals.byStatus.Done.length;
   const progress = data.assignments.length
     ? Math.round((completed / data.assignments.length) * 100)
     : 0;
-  const hasExamples = [
-    ...data.classes,
-    ...data.assignments,
-    ...data.notes,
-  ].some((r) => r.example);
-  const upNext = assignments.filter((a) => a.status !== 'Done').slice(0, 5);
+  const hasExamples = useMemo(
+    () =>
+      data.classes.some((r) => r.example) ||
+      data.assignments.some((r) => r.example) ||
+      data.notes.some((r) => r.example),
+    [data],
+  );
+  const incomplete = useMemo(
+    () => assignments.filter((a) => a.status !== 'Done'),
+    [assignments],
+  );
+  const upNext = useMemo(() => incomplete.slice(0, 5), [incomplete]);
   const stats: {
     icon: LucideIcon;
     label: string;
@@ -252,7 +331,7 @@ export default function SchoolDashboard() {
     {
       icon: ListTodo,
       label: 'To do',
-      value: data.assignments.filter((a) => a.status === 'To do').length,
+      value: totals.byStatus['To do'].length,
 
       color: 'blue',
       target: 'Assignments',
@@ -261,7 +340,7 @@ export default function SchoolDashboard() {
     {
       icon: Target,
       label: 'In progress',
-      value: data.assignments.filter((a) => a.status === 'In progress').length,
+      value: totals.byStatus['In progress'].length,
 
       color: 'orange',
       target: 'Assignments',
@@ -295,88 +374,90 @@ export default function SchoolDashboard() {
     });
   const table = (items: Assignment[]) =>
     items.length ? (
-      <div className="table-scroll">
-        <table className="assignment-table">
-          <thead>
-            <tr>
-              <th>Assignment</th>
-              <th>
-                Due date <ArrowDown size={12} />
-              </th>
-              <th>Priority</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((a) => (
-              <tr key={a.id}>
-                <td>
-                  <div className="assignment-name">
-                    <button
-                      disabled={!loaded || busy}
-                      onClick={() => finish(a)}
-                      className={`check-button ${a.status === 'Done' ? 'checked' : ''}`}
-                      aria-label={`${a.status === 'Done' ? 'Reopen' : 'Complete'} ${a.title}`}
-                    >
-                      {a.status === 'Done' && <Check size={12} />}
-                    </button>
-                    <button
-                      className={`assignment-title ${a.status === 'Done' ? 'completed-title' : ''}`}
-                      onClick={() => openEditor('assignments', a)}
-                    >
-                      <strong>{a.title}</strong>
-                      <CourseLabel
-                        course={data.classes.find((c) => c.id === a.classId)}
-                      />
-                    </button>
-                  </div>
-                </td>
-                <td>
-                  <span
-                    className={
-                      a.status !== 'Done' && a.dueDate <= today
-                        ? 'due-today'
-                        : ''
-                    }
-                  >
-                    {a.dueDate === today ? 'Today' : dateLabel(a.dueDate)}
-                  </span>
-                  {a.status !== 'Done' && a.dueDate < today && (
-                    <small className="overdue-label">Overdue</small>
-                  )}
-                </td>
-                <td>
-                  <span
-                    className={`priority priority-${a.priority.toLowerCase()}`}
-                  >
-                    <span />
-                    {a.priority}
-                  </span>
-                </td>
-                <td>
-                  <select
-                    aria-label={`Status of ${a.title}`}
-                    disabled={!loaded || busy}
-                    className={`status-select status status-${a.status.toLowerCase().replaceAll(' ', '-')}`}
-                    value={a.status}
-                    onChange={(e) =>
-                      act({
-                        action: 'save',
-                        kind: 'assignments',
-                        record: { ...a, status: e.target.value },
-                      })
-                    }
-                  >
-                    {statuses.map((s) => (
-                      <option key={s}>{s}</option>
-                    ))}
-                  </select>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <PagedItems items={items} label="assignments">
+        {(visible) => (
+          <div className="table-scroll">
+            <table className="assignment-table">
+              <thead>
+                <tr>
+                  <th>Assignment</th>
+                  <th>
+                    Due date <ArrowDown size={12} />
+                  </th>
+                  <th>Priority</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((a) => (
+                  <tr key={a.id}>
+                    <td>
+                      <div className="assignment-name">
+                        <button
+                          disabled={!loaded || busy}
+                          onClick={() => finish(a)}
+                          className={`check-button ${a.status === 'Done' ? 'checked' : ''}`}
+                          aria-label={`${a.status === 'Done' ? 'Reopen' : 'Complete'} ${a.title}`}
+                        >
+                          {a.status === 'Done' && <Check size={12} />}
+                        </button>
+                        <button
+                          className={`assignment-title ${a.status === 'Done' ? 'completed-title' : ''}`}
+                          onClick={() => openEditor('assignments', a)}
+                        >
+                          <strong>{a.title}</strong>
+                          <CourseLabel course={courseIndex.get(a.classId)} />
+                        </button>
+                      </div>
+                    </td>
+                    <td>
+                      <span
+                        className={
+                          a.status !== 'Done' && a.dueDate <= today
+                            ? 'due-today'
+                            : ''
+                        }
+                      >
+                        {a.dueDate === today ? 'Today' : dateLabel(a.dueDate)}
+                      </span>
+                      {a.status !== 'Done' && a.dueDate < today && (
+                        <small className="overdue-label">Overdue</small>
+                      )}
+                    </td>
+                    <td>
+                      <span
+                        className={`priority priority-${a.priority.toLowerCase()}`}
+                      >
+                        <span />
+                        {a.priority}
+                      </span>
+                    </td>
+                    <td>
+                      <select
+                        aria-label={`Status of ${a.title}`}
+                        disabled={!loaded || busy}
+                        className={`status-select status status-${a.status.toLowerCase().replaceAll(' ', '-')}`}
+                        value={a.status}
+                        onChange={(e) =>
+                          act({
+                            action: 'save',
+                            kind: 'assignments',
+                            record: { ...a, status: e.target.value },
+                          })
+                        }
+                      >
+                        {statuses.map((s) => (
+                          <option key={s}>{s}</option>
+                        ))}
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </PagedItems>
     ) : (
       <Empty
         icon={CheckCheck}
@@ -390,16 +471,20 @@ export default function SchoolDashboard() {
     );
   const cards = (items: Course[]) =>
     items.length ? (
-      <div className="class-grid">
-        {items.map((c) => (
-          <ClassCard
-            key={`${c.id}-${c.calendarSchedule?.startTime || 'class'}`}
-            course={c}
-            assignments={data.assignments}
-            onClick={() => navigate('Classes', c.id)}
-          />
-        ))}
-      </div>
+      <PagedItems items={items} label="classes">
+        {(visible) => (
+          <div className="class-grid">
+            {visible.map((c) => (
+              <ClassCard
+                key={`${c.id}-${c.calendarSchedule?.startTime || 'class'}`}
+                course={c}
+                counts={totals.byClass.get(c.id)}
+                onClick={() => navigate('Classes', c.id)}
+              />
+            ))}
+          </div>
+        )}
+      </PagedItems>
     ) : (
       <Empty
         icon={BookOpen}
@@ -409,36 +494,43 @@ export default function SchoolDashboard() {
     );
   const noteCards = (items: Note[]) =>
     items.length ? (
-      <div className="notes-grid">
-        {items.map((n) => (
-          <button
-            className="note-card"
-            key={n.id}
-            onClick={() => openEditor('notes', n)}
-          >
-            <div className="note-card-top">
-              <span className="note-icon">
-                <FileText size={20} />
-              </span>
-              <CourseLabel
-                course={data.classes.find((c) => c.id === n.classId)}
-              />
-            </div>
-            <h3>{n.title}</h3>
-            <p>
-              {n.content || 'No content yet. Open this note to start writing.'}
-            </p>
-            <div className="note-meta">
-              Edited{' '}
-              {new Date(n.updatedAt).toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-              })}
-              <ArrowRight size={15} />
-            </div>
-          </button>
-        ))}
-      </div>
+      <PagedItems items={items} label="notes">
+        {(visible) => (
+          <div className="notes-grid">
+            {visible.map((n) => (
+              <button
+                className="note-card"
+                key={n.id}
+                onClick={() => openEditor('notes', n)}
+              >
+                <div className="note-card-top">
+                  <span className="note-icon">
+                    <FileText size={20} />
+                  </span>
+                  <CourseLabel course={courseIndex.get(n.classId)} />
+                </div>
+                <h3>{n.title}</h3>
+                <p>
+                  {n.content
+                    ? n.content.length > 500
+                      ? n.content.slice(0, 500) + '…'
+                      : n.content
+                    : 'No content yet. Open this note to start writing.'}
+                </p>
+                <div className="note-meta">
+                  Edited {shortDate.format(new Date(n.updatedAt))}
+                  {n.references?.length ? (
+                    <span className="reference-count">
+                      <Paperclip size={13} /> {n.references.length}
+                    </span>
+                  ) : null}
+                  <ArrowRight size={15} />
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </PagedItems>
     ) : (
       <Empty
         icon={FileText}
@@ -497,12 +589,16 @@ export default function SchoolDashboard() {
           </button>
         </div>
         <div className="side-courses">
-          {data.classes.map((c) => (
-            <button key={c.id} onClick={() => navigate('Classes', c.id)}>
-              <span className="color-dot" style={{ background: c.color }} />
-              {c.name}
-            </button>
-          ))}
+          <PagedItems items={data.classes} label="sidebar classes">
+            {(visible) =>
+              visible.map((c) => (
+                <button key={c.id} onClick={() => navigate('Classes', c.id)}>
+                  <span className="color-dot" style={{ background: c.color }} />
+                  {c.name}
+                </button>
+              ))
+            }
+          </PagedItems>
           {!data.classes.length && (
             <span className="sidebar-empty">No classes</span>
           )}
@@ -649,10 +745,7 @@ export default function SchoolDashboard() {
                         <h2>
                           Up next{' '}
                           <span className="number-tag">
-                            {
-                              assignments.filter((a) => a.status !== 'Done')
-                                .length
-                            }
+                            {incomplete.length}
                           </span>
                         </h2>
                       </div>
@@ -760,11 +853,7 @@ export default function SchoolDashboard() {
                         </span>
                         <div>
                           <strong>{n.title}</strong>
-                          <CourseLabel
-                            course={data.classes.find(
-                              (c) => c.id === n.classId,
-                            )}
-                          />
+                          <CourseLabel course={courseIndex.get(n.classId)} />
                         </div>
                         <ArrowRight size={14} />
                       </button>
@@ -810,6 +899,7 @@ export default function SchoolDashboard() {
                   Edit class
                 </Button>
               </div>
+              <ReferencePreviewList references={activeClass.references} />
               <section className="panel assignments-panel">
                 <div className="section-heading">
                   <h2>
@@ -920,56 +1010,65 @@ export default function SchoolDashboard() {
                     <h2>
                       <Status status={s} />
                       <span className="number-tag">
-                        {assignments.filter((a) => a.status === s).length}
+                        {filteredTotals.byStatus[s].length}
                       </span>
                     </h2>
-                    {assignments
-                      .filter((a) => a.status === s)
-                      .map((a) => (
-                        <article className="kanban-card" key={a.id}>
-                          <button
-                            className="board-open"
-                            onClick={() => openEditor('assignments', a)}
-                          >
-                            <CourseLabel
-                              course={data.classes.find(
-                                (c) => c.id === a.classId,
+                    <PagedItems
+                      items={filteredTotals.byStatus[s]}
+                      label={`${s} assignments`}
+                    >
+                      {(visible) =>
+                        visible.map((a) => (
+                          <article className="kanban-card" key={a.id}>
+                            <button
+                              className="board-open"
+                              onClick={() => openEditor('assignments', a)}
+                            >
+                              <CourseLabel
+                                course={courseIndex.get(a.classId)}
+                              />
+                              <h3>{a.title}</h3>
+                              {a.description && (
+                                <p>
+                                  {a.description.length > 500
+                                    ? a.description.slice(0, 500) + '…'
+                                    : a.description}
+                                </p>
                               )}
-                            />
-                            <h3>{a.title}</h3>
-                            {a.description && <p>{a.description}</p>}
-                            <div className="board-meta">
-                              <span>
-                                <Clock3 size={13} />
-                                {dateLabel(a.dueDate)}
-                              </span>
-                              <span
-                                className={`priority priority-${a.priority.toLowerCase()}`}
-                              >
-                                <span />
-                                {a.priority}
-                              </span>
-                            </div>
-                          </button>
-                          <select
-                            aria-label={`Move ${a.title}`}
-                            value={a.status}
-                            disabled={!loaded || busy}
-                            onChange={(e) =>
-                              act({
-                                action: 'save',
-                                kind: 'assignments',
-                                record: { ...a, status: e.target.value },
-                              })
-                            }
-                          >
-                            {statuses.map((st) => (
-                              <option key={st}>{st}</option>
-                            ))}
-                          </select>
-                        </article>
-                      ))}
-                    {!assignments.some((a) => a.status === s) && (
+                              <div className="board-meta">
+                                <span>
+                                  <Clock3 size={13} />
+                                  {dateLabel(a.dueDate)}
+                                </span>
+                                <span
+                                  className={`priority priority-${a.priority.toLowerCase()}`}
+                                >
+                                  <span />
+                                  {a.priority}
+                                </span>
+                              </div>
+                            </button>
+                            <select
+                              aria-label={`Move ${a.title}`}
+                              value={a.status}
+                              disabled={!loaded || busy}
+                              onChange={(e) =>
+                                act({
+                                  action: 'save',
+                                  kind: 'assignments',
+                                  record: { ...a, status: e.target.value },
+                                })
+                              }
+                            >
+                              {statuses.map((st) => (
+                                <option key={st}>{st}</option>
+                              ))}
+                            </select>
+                          </article>
+                        ))
+                      }
+                    </PagedItems>
+                    {!filteredTotals.byStatus[s].length && (
                       <p className="mini-empty">Nothing here yet.</p>
                     )}
                     <button
@@ -1074,7 +1173,8 @@ export default function SchoolDashboard() {
                       i - month.getDay() + 1,
                     );
                     const key = localDate(date);
-                    const items = assignments.filter((a) => a.dueDate === key);
+                    const items = filteredTotals.byDate.get(key) ?? [];
+                    const meetings = calendarMeetings.get(key) ?? [];
                     return (
                       <div
                         key={key}
@@ -1089,27 +1189,15 @@ export default function SchoolDashboard() {
                         >
                           {date.getDate()}
                         </button>
-                        {meetingsOn(
-                          data.classes.filter(
-                            (c) =>
-                              classMatches(c.id) &&
-                              matches(c.name, c.code, c.schedule),
-                          ),
-                          key,
-                        ).map((c) => (
+                        {meetings.slice(0, 4).map((c, meetingIndex) => (
                           <button
-                            key={`${c.id}-${c.calendarSchedule?.startTime || 'class'}`}
+                            key={`${c.id}-${c.calendarSchedule?.startTime || 'class'}-${meetingIndex}`}
                             className="calendar-item calendar-meeting"
                             style={
                               { '--course-color': c.color } as CSSProperties
                             }
                             onClick={() =>
-                              openEditor(
-                                'classes',
-                                data.classes.find(
-                                  (original) => original.id === c.id,
-                                ) || c,
-                              )
+                              openEditor('classes', courseIndex.get(c.id) || c)
                             }
                             title={`${c.name} · ${c.calendarSchedule!.startTime}–${c.calendarSchedule!.endTime}`}
                           >
@@ -1126,14 +1214,22 @@ export default function SchoolDashboard() {
                             )}
                           </button>
                         ))}
+                        {meetings.length > 4 && (
+                          <button
+                            className="calendar-more"
+                            onClick={() => setSelectedDay(key)}
+                          >
+                            +{meetings.length - 4} more meetings
+                          </button>
+                        )}
                         {items.slice(0, 3).map((a) => (
                           <button
                             className={`calendar-item ${a.status === 'Done' ? 'calendar-done' : ''}`}
                             style={
                               {
                                 '--course-color':
-                                  data.classes.find((c) => c.id === a.classId)
-                                    ?.color || '#9170df',
+                                  courseIndex.get(a.classId)?.color ||
+                                  '#9170df',
                               } as CSSProperties
                             }
                             key={a.id}
@@ -1177,43 +1273,40 @@ export default function SchoolDashboard() {
                       Add assignment
                     </button>
                   </div>
-                  <div className="day-meetings">
-                    {meetingsOn(
-                      data.classes.filter(
-                        (c) =>
-                          classMatches(c.id) &&
-                          matches(c.name, c.code, c.schedule),
-                      ),
-                      selectedDay,
-                    ).map((c) => (
-                      <button
-                        key={`${c.id}-${c.calendarSchedule?.startTime || 'class'}`}
-                        className="calendar-item"
-                        style={{ '--course-color': c.color } as CSSProperties}
-                        onClick={() =>
-                          openEditor(
-                            'classes',
-                            data.classes.find(
-                              (original) => original.id === c.id,
-                            ) || c,
-                          )
-                        }
-                      >
-                        <BookOpen size={16} />
-                        <strong>{c.name}</strong>
-                        <span>
-                          {c.calendarSchedule!.startTime}–
-                          {c.calendarSchedule!.endTime}
-                        </span>
-                        {(c.calendarSchedule?.location || c.schedule) && (
-                          <span>
-                            {c.calendarSchedule?.location || c.schedule}
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                  {table(assignments.filter((a) => a.dueDate === selectedDay))}
+                  <PagedItems
+                    items={calendarMeetings.get(selectedDay) ?? []}
+                    label="meetings"
+                  >
+                    {(visible) => (
+                      <div className="day-meetings">
+                        {visible.map((c, meetingIndex) => (
+                          <button
+                            key={`${c.id}-${c.calendarSchedule?.startTime || 'class'}-${meetingIndex}`}
+                            className="calendar-item"
+                            style={
+                              { '--course-color': c.color } as CSSProperties
+                            }
+                            onClick={() =>
+                              openEditor('classes', courseIndex.get(c.id) || c)
+                            }
+                          >
+                            <BookOpen size={16} />
+                            <strong>{c.name}</strong>
+                            <span>
+                              {c.calendarSchedule!.startTime}–
+                              {c.calendarSchedule!.endTime}
+                            </span>
+                            {(c.calendarSchedule?.location || c.schedule) && (
+                              <span>
+                                {c.calendarSchedule?.location || c.schedule}
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </PagedItems>
+                  {table(filteredTotals.byDate.get(selectedDay) ?? [])}
                 </div>
               )}
             </section>
@@ -1339,6 +1432,332 @@ export default function SchoolDashboard() {
   );
 }
 
+// Keep DOM work bounded even at the 2,000-record workspace limit. Reset the
+// page when search/filter results change; every record remains reachable.
+function PagedItems<T>({
+  items,
+  label,
+  children,
+}: {
+  items: T[];
+  label: string;
+  children: (visible: T[]) => ReactNode;
+}) {
+  const pageSize = 60;
+  const [selection, setSelection] = useState({ items, page: 0 });
+  const page =
+    selection.items === items
+      ? Math.min(
+          selection.page,
+          Math.max(0, Math.ceil(items.length / pageSize) - 1),
+        )
+      : 0;
+  const start = page * pageSize;
+  return (
+    <>
+      {children(items.slice(start, start + pageSize))}
+      {items.length > pageSize && (
+        <nav className="list-pagination" aria-label={`${label} pages`}>
+          <Button
+            variant="outline"
+            disabled={page === 0}
+            onClick={() => setSelection({ items, page: page - 1 })}
+          >
+            Previous
+          </Button>
+          <output>
+            {start + 1}–{Math.min(start + pageSize, items.length)} of{' '}
+            {items.length} {label}
+          </output>
+          <Button
+            variant="outline"
+            disabled={start + pageSize >= items.length}
+            onClick={() => setSelection({ items, page: page + 1 })}
+          >
+            Next
+          </Button>
+        </nav>
+      )}
+    </>
+  );
+}
+
+const MAX_REFERENCE_BYTES = 3 * 1024 * 1024;
+
+function formatReferenceSize(size?: number) {
+  if (!size) return '';
+  return size < 1024 * 1024
+    ? `${Math.max(1, Math.round(size / 1024))} KB`
+    : `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function referenceIcon(reference: Reference) {
+  if (reference.kind === 'image') return <FileImage size={18} />;
+  if (reference.kind === 'pdf') return <FileText size={18} />;
+  if (reference.kind === 'url') return <Link2 size={18} />;
+  return <File size={18} />;
+}
+
+function openReference(reference: Reference) {
+  if (reference.kind !== 'url' || typeof window === 'undefined') return false;
+  const desktop = (
+    window as Window & {
+      schooldeskDesktop?: { openExternal?: (url: string) => Promise<void> };
+    }
+  ).schooldeskDesktop;
+  if (desktop?.openExternal) {
+    void desktop.openExternal(reference.href);
+    return true;
+  }
+  return false;
+}
+
+function ReferencePreviewList({
+  references,
+  title = 'References',
+  onRemove,
+}: {
+  references?: Reference[];
+  title?: string;
+  onRemove?: (id: string) => void;
+}) {
+  if (!references?.length) return null;
+  return (
+    <section className="reference-section">
+      <div className="reference-section-heading">
+        <h3>
+          <Paperclip size={16} />
+          {title}
+          <span className="number-tag">{references.length}</span>
+        </h3>
+      </div>
+      <div className="reference-grid">
+        {references.map((reference) => (
+          <ReferencePreview
+            key={reference.id}
+            reference={reference}
+            onRemove={onRemove}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ReferencePreview({
+  reference,
+  onRemove,
+}: {
+  reference: Reference;
+  onRemove?: (id: string) => void;
+}) {
+  const label =
+    reference.kind === 'url'
+      ? (() => {
+          try {
+            return new URL(reference.href).hostname.replace(/^www\./, '');
+          } catch {
+            return 'Web link';
+          }
+        })()
+      : `${reference.kind.toUpperCase()}${reference.size ? ` · ${formatReferenceSize(reference.size)}` : ''}`;
+  const localPreview =
+    reference.kind === 'image' ? (
+      <img
+        className="reference-thumbnail"
+        src={reference.href}
+        alt=""
+        loading="lazy"
+      />
+    ) : reference.kind === 'pdf' ? (
+      <iframe
+        className="reference-pdf-preview"
+        src={reference.href}
+        title={`Preview of ${reference.title}`}
+      />
+    ) : (
+      <span className="reference-file-icon">{referenceIcon(reference)}</span>
+    );
+  return (
+    <article className="reference-card">
+      {localPreview}
+      <div className="reference-card-body">
+        <strong title={reference.title}>{reference.title}</strong>
+        <small>{label}</small>
+        {reference.description && <p>{reference.description}</p>}
+      </div>
+      <div className="reference-card-actions">
+        {reference.kind === 'url' ? (
+          <a
+            href={reference.href}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`Open ${reference.title}`}
+            onClick={(event: MouseEvent<HTMLAnchorElement>) => {
+              if (openReference(reference)) event.preventDefault();
+            }}
+          >
+            <ExternalLink size={15} />
+          </a>
+        ) : (
+          <a
+            href={reference.href}
+            download={reference.title}
+            aria-label={`Download ${reference.title}`}
+          >
+            <Download size={15} />
+          </a>
+        )}
+        {onRemove && (
+          <button
+            type="button"
+            aria-label={`Remove ${reference.title}`}
+            onClick={() => onRemove(reference.id)}
+          >
+            <Trash2 size={15} />
+          </button>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function ReferenceEditor({
+  references,
+  onChange,
+}: {
+  references: Reference[];
+  onChange: Dispatch<SetStateAction<Reference[]>>;
+}) {
+  const [url, setUrl] = useState('');
+  const [urlTitle, setUrlTitle] = useState('');
+  const [fileError, setFileError] = useState('');
+  const addUrl = () => {
+    const value = url.trim();
+    let parsed: URL;
+    try {
+      parsed = new URL(value);
+    } catch {
+      setFileError('Enter a complete URL, such as https://example.com.');
+      return;
+    }
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      setFileError('Only http and https links can be added.');
+      return;
+    }
+    if (references.length >= 20) {
+      setFileError('You can add up to 20 references.');
+      return;
+    }
+    onChange((current) => [
+      ...current,
+      {
+        id: crypto.randomUUID(),
+        title: urlTitle.trim() || parsed.hostname.replace(/^www\./, ''),
+        kind: 'url',
+        href: value,
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+    setUrl('');
+    setUrlTitle('');
+    setFileError('');
+  };
+  const addFiles = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = [...(event.target.files ?? [])];
+    event.currentTarget.value = '';
+    if (!files.length) return;
+    if (references.length + files.length > 20) {
+      setFileError('You can add up to 20 references.');
+      return;
+    }
+    for (const file of files) {
+      if (file.size > MAX_REFERENCE_BYTES) {
+        setFileError(`${file.name} is larger than 3 MB.`);
+        continue;
+      }
+      const kind: ReferenceKind =
+        file.type === 'application/pdf'
+          ? 'pdf'
+          : file.type.startsWith('image/')
+            ? 'image'
+            : 'file';
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result !== 'string') return;
+        onChange((current) => [
+          ...current,
+          {
+            id: crypto.randomUUID(),
+            title: file.name,
+            kind,
+            href: reader.result as string,
+            mimeType: file.type || 'application/octet-stream',
+            size: file.size,
+            createdAt: new Date().toISOString(),
+          },
+        ]);
+      };
+      reader.onerror = () => setFileError(`Could not read ${file.name}.`);
+      reader.readAsDataURL(file);
+    }
+    if (!files.some((file) => file.size > MAX_REFERENCE_BYTES))
+      setFileError('');
+  };
+  return (
+    <div className="reference-editor">
+      <div className="field-label">
+        <Paperclip size={15} /> References
+        <span>{references.length}/20</span>
+      </div>
+      <ReferencePreviewList
+        references={references}
+        onRemove={(id) =>
+          onChange((current) => current.filter((item) => item.id !== id))
+        }
+      />
+      <div className="reference-add-row">
+        <Input
+          aria-label="Reference URL"
+          value={url}
+          onChange={(event) => setUrl(event.target.value)}
+          placeholder="Paste a URL"
+          maxLength={2000}
+          type="url"
+        />
+        <Input
+          aria-label="Reference title"
+          value={urlTitle}
+          onChange={(event) => setUrlTitle(event.target.value)}
+          placeholder="Link title (optional)"
+          maxLength={180}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          onClick={addUrl}
+          disabled={!url.trim() || references.length >= 20}
+        >
+          <Link2 size={15} /> Add link
+        </Button>
+      </div>
+      <label className="reference-file-picker">
+        <Paperclip size={15} />
+        Add files, images, or PDFs
+        <input
+          type="file"
+          multiple
+          accept="*/*"
+          onChange={addFiles}
+          disabled={references.length >= 20}
+        />
+        <small>Up to 3 MB each</small>
+      </label>
+      {fileError && <p className="form-error">{fileError}</p>}
+    </div>
+  );
+}
+
 function CourseLabel({ course }: { course?: Course }) {
   return (
     <span className="course-label">
@@ -1381,15 +1800,15 @@ function Empty({
 }
 function ClassCard({
   course: c,
-  assignments,
+  counts,
   onClick,
 }: {
   course: Course;
-  assignments: Assignment[];
+  counts?: { total: number; done: number };
   onClick: () => void;
 }) {
-  const all = assignments.filter((a) => a.classId === c.id);
-  const done = all.filter((a) => a.status === 'Done').length;
+  const { total, done } = counts ?? { total: 0, done: 0 };
+  const scheduleLabel = classScheduleLabel(c);
   return (
     <button
       className="class-card"
@@ -1409,20 +1828,25 @@ function ClassCard({
         <ArrowRight size={16} />
       </div>
       {c.teacher && <p>{c.teacher}</p>}
-      {classScheduleLabel(c) && (
+      {scheduleLabel && (
         <p className="class-schedule">
           <CalendarDays size={12} />
-          {classScheduleLabel(c)}
+          {scheduleLabel}
         </p>
       )}
       <div className="class-card-bottom">
-        <span>{all.length - done} assignments left</span>
-        <span>{all.length ? Math.round((done / all.length) * 100) : 0}%</span>
+        <span>{total - done} assignments left</span>
+        <span className="class-card-bottom-right">
+          {c.references?.length ? (
+            <span className="reference-count" title="References attached">
+              <Paperclip size={12} /> {c.references.length}
+            </span>
+          ) : null}
+          {total ? Math.round((done / total) * 100) : 0}%
+        </span>
       </div>
       <div className="class-progress">
-        <span
-          style={{ width: `${all.length ? (done / all.length) * 100 : 0}%` }}
-        />
+        <span style={{ width: `${total ? (done / total) * 100 : 0}%` }} />
       </div>
     </button>
   );
@@ -1449,6 +1873,9 @@ function EditorForm({
 }) {
   const item = editor.item as Partial<Course & Assignment & Note> | undefined;
   const [color, setColor] = useState(item?.color || colors[0]);
+  const [references, setReferences] = useState<Reference[]>(
+    item?.references ?? [],
+  );
   const initialMeetings = schedulesFor(item || {});
   const [onCalendar, setOnCalendar] = useState(initialMeetings.length > 0);
   const [meetingRows, setMeetingRows] = useState<ClassSchedule[]>(
@@ -1477,6 +1904,9 @@ function EditorForm({
             color,
             calendarSchedules: onCalendar ? meetingRows : [],
           }
+        : {}),
+      ...(editor.kind === 'classes' || editor.kind === 'notes'
+        ? { references }
         : {}),
     }).catch(() => {});
   };
@@ -1596,6 +2026,7 @@ function EditorForm({
                 ))}
               </div>
             </div>
+            <ReferenceEditor references={references} onChange={setReferences} />
           </>
         ) : (
           <>
@@ -1670,17 +2101,23 @@ function EditorForm({
                 </label>
               </>
             ) : (
-              <label>
-                Your notes{' '}
-                <Textarea
-                  className="note-editor"
-                  name="content"
-                  defaultValue={item?.content}
-                  placeholder="Write your notes…"
-                  maxLength={50000}
-                  rows={12}
+              <>
+                <label>
+                  Your notes{' '}
+                  <Textarea
+                    className="note-editor"
+                    name="content"
+                    defaultValue={item?.content}
+                    placeholder="Write your notes…"
+                    maxLength={50000}
+                    rows={12}
+                  />
+                </label>
+                <ReferenceEditor
+                  references={references}
+                  onChange={setReferences}
                 />
-              </label>
+              </>
             )}
           </>
         )}
@@ -1747,7 +2184,7 @@ function MeetingFields({
                   onChange({
                     ...m,
                     weekdays: e.target.checked
-                      ? [...m.weekdays, index].sort()
+                      ? [...m.weekdays, index].sort((a, b) => a - b)
                       : m.weekdays.filter((d) => d !== index),
                   })
                 }

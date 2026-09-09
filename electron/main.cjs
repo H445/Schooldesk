@@ -1,7 +1,30 @@
-const { app, BrowserWindow, Menu, session } = require('electron');
+const {
+  app,
+  BrowserWindow,
+  Menu,
+  session,
+  shell,
+  ipcMain,
+} = require('electron');
 const path = require('node:path');
 
 const rendererPath = path.join(__dirname, '..', 'dist', 'client', 'index.html');
+const pdfViewerOrigin = 'chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/';
+const isLocalRendererResource = (url) =>
+  url.startsWith('file://') ||
+  url.startsWith('data:') ||
+  url.startsWith(pdfViewerOrigin);
+
+ipcMain.handle('schooldesk:open-external', (_event, value) => {
+  if (typeof value !== 'string') return false;
+  try {
+    const url = new URL(value);
+    if (!['http:', 'https:'].includes(url.protocol)) return false;
+    return shell.openExternal(url.toString()).then(() => true);
+  } catch {
+    return false;
+  }
+});
 
 function createWindow() {
   const window = new BrowserWindow({
@@ -35,7 +58,9 @@ app.whenReady().then(() => {
     },
   );
   session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
-    callback({ cancel: !details.url.startsWith('file://') });
+    // data: is needed for locally stored previews. The chrome-extension
+    // origin is Electron's built-in PDF viewer, not a remote request.
+    callback({ cancel: !isLocalRendererResource(details.url) });
   });
   Menu.setApplicationMenu(null);
   createWindow();

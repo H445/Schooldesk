@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   loadLocalWorkspace,
   saveLocalMutation,
+  serializeWorkspace,
 } from '../lib/local-workspace.ts';
 
 function memoryStorage() {
@@ -47,4 +48,56 @@ test('offline workspace seeds the semester schedule and persists mutations local
   assert.equal(next.revision, 1);
   assert.equal(reloaded.data.assignments[0].title, 'Read chapter one');
   assert.equal(reloaded.revision, 1);
+});
+
+void test('cached serialization round-trips edits and preserves the v1 storage format', () => {
+  globalThis.localStorage = memoryStorage();
+  let state = loadLocalWorkspace();
+  assert.deepEqual(JSON.parse(serializeWorkspace(state)), state);
+  state = saveLocalMutation(state, {
+    action: 'save',
+    kind: 'notes',
+    record: {
+      id: 'n',
+      title: 'Quotes " and unicode 日本語',
+      content: 'Line one\nLine two',
+      classId: '',
+    },
+  });
+  assert.deepEqual(JSON.parse(serializeWorkspace(state)), state);
+  state = saveLocalMutation(state, {
+    action: 'save',
+    kind: 'notes',
+    record: { ...state.data.notes[0], content: 'Changed' },
+  });
+  assert.deepEqual(loadLocalWorkspace(), state);
+  state = saveLocalMutation(state, {
+    action: 'delete',
+    kind: 'notes',
+    id: 'n',
+  });
+  assert.deepEqual(loadLocalWorkspace(), state);
+});
+
+void test('a failed write leaves the saved snapshot intact and can be retried', () => {
+  const storage = memoryStorage();
+  globalThis.localStorage = storage;
+  const initial = loadLocalWorkspace();
+  const mutation = {
+    action: 'save',
+    kind: 'notes',
+    record: { id: 'n', title: 'Keep', classId: '', content: 'Content' },
+  };
+  globalThis.localStorage = {
+    ...storage,
+    setItem() {
+      throw new Error('Quota exceeded');
+    },
+  };
+  assert.throws(() => saveLocalMutation(initial, mutation), /Quota exceeded/);
+  assert.deepEqual(loadLocalWorkspace(), initial);
+  globalThis.localStorage = storage;
+  const next = saveLocalMutation(initial, mutation);
+  assert.equal(next.revision, initial.revision + 1);
+  assert.deepEqual(loadLocalWorkspace(), next);
 });
