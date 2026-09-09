@@ -2149,6 +2149,36 @@ textarea:focus-visible {
   font-size: 1rem;
   font-weight: 550;
 }
+.references-manager-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--border);
+}
+.references-manager-heading h2 {
+  font-size: 1.125rem;
+  font-weight: 550;
+}
+.references-manager-heading p {
+  margin-top: 5px;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+}
+.reference-manager-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  padding: 20px 22px;
+}
+.reference-manager-panel > .empty-state {
+  border: 0;
+  border-radius: 0;
+}
+.reference-manager-dialog {
+  max-width: 650px !important;
+}
 .reference-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -2272,6 +2302,19 @@ textarea:focus-visible {
 }
 .reference-file-picker small {
   color: var(--muted-foreground);
+}
+@media (max-width: 600px) {
+  .references-manager-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .reference-add-row {
+    grid-template-columns: 1fr;
+  }
+  .reference-manager-grid {
+    grid-template-columns: 1fr;
+    padding-inline: 14px;
+  }
 }
 .calendar-meeting {
   border-left-style: double;

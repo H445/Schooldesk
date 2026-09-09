@@ -10,10 +10,12 @@ const path = require('node:path');
 
 const rendererPath = path.join(__dirname, '..', 'dist', 'client', 'index.html');
 const pdfViewerOrigin = 'chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/';
+const chromeResourcesOrigin = 'chrome://resources/';
 const isLocalRendererResource = (url) =>
   url.startsWith('file://') ||
   url.startsWith('data:') ||
-  url.startsWith(pdfViewerOrigin);
+  url.startsWith(pdfViewerOrigin) ||
+  url.startsWith(chromeResourcesOrigin);
 
 ipcMain.handle('schooldesk:open-external', (_event, value) => {
   if (typeof value !== 'string') return false;
@@ -58,8 +60,9 @@ app.whenReady().then(() => {
     },
   );
   session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
-    // data: is needed for locally stored previews. The chrome-extension
-    // origin is Electron's built-in PDF viewer, not a remote request.
+    // data: is needed for locally stored previews. The chrome-extension and
+    // chrome://resources origins are Electron's built-in PDF viewer assets,
+    // not remote requests.
     callback({ cancel: !isLocalRendererResource(details.url) });
   });
   Menu.setApplicationMenu(null);

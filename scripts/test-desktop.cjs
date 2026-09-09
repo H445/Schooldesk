@@ -43,7 +43,8 @@ void app
           !details.url.startsWith('data:') &&
           !details.url.startsWith(
             'chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/',
-          )
+          ) &&
+          !details.url.startsWith('chrome://resources/')
         )
           remoteRequests.push(details.url);
         callback({
@@ -52,7 +53,8 @@ void app
             !details.url.startsWith('data:') &&
             !details.url.startsWith(
               'chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/',
-            ),
+            ) &&
+            !details.url.startsWith('chrome://resources/'),
         });
       },
     );
@@ -189,6 +191,42 @@ void app
         () => document.querySelectorAll('.reference-pdf-preview').length,
       ),
       1,
+    );
+
+    await clickLabel('References');
+    await waitFor(() => document.querySelector('.references-manager-panel'));
+    assert.equal(
+      await evaluate(
+        () =>
+          document.querySelectorAll('.reference-manager-grid .reference-card')
+            .length,
+      ),
+      4,
+    );
+    await clickLabel('New reference');
+    await waitFor(() => document.querySelector('.reference-manager-dialog'));
+    await evaluate(() => {
+      const url = document.querySelector('input[aria-label="Reference URL"]');
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        'value',
+      ).set.call(url, 'https://example.edu/reading');
+      url.dispatchEvent(new Event('input', { bubbles: true }));
+      document.querySelector('.reference-add-row button').click();
+    });
+    await waitFor(
+      () =>
+        document.querySelectorAll('.reference-manager-dialog .reference-card')
+          .length === 1,
+    );
+    await evaluate(() =>
+      document.querySelector('.reference-manager-dialog form').requestSubmit(),
+    );
+    await waitFor(() => !document.querySelector('.reference-manager-dialog'));
+    await waitFor(
+      () =>
+        document.querySelectorAll('.reference-manager-grid .reference-card')
+          .length === 5,
     );
 
     const { performanceFixture } =

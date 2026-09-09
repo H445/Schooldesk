@@ -82,16 +82,30 @@ import {
   type LocalWorkspace,
 } from '@/lib/local-workspace';
 
-type View = 'Overview' | 'Classes' | 'Assignments' | 'Notes' | 'Calendar';
+type View =
+  | 'Overview'
+  | 'Classes'
+  | 'Assignments'
+  | 'Notes'
+  | 'References'
+  | 'Calendar';
 type Editor = {
   kind: 'classes' | 'assignments' | 'notes';
   item?: Course | Assignment | Note;
+};
+type ReferenceEntry = {
+  reference: Reference;
+  ownerKind: 'classes' | 'notes';
+  ownerId: string;
+  ownerClassId: string;
+  ownerName: string;
 };
 const navigation: { icon: LucideIcon; label: View }[] = [
   { icon: LayoutDashboard, label: 'Overview' },
   { icon: BookOpen, label: 'Classes' },
   { icon: ListTodo, label: 'Assignments' },
   { icon: FileText, label: 'Notes' },
+  { icon: Paperclip, label: 'References' },
   { icon: CalendarDays, label: 'Calendar' },
 ];
 const statuses: Assignment['status'][] = ['To do', 'In progress', 'Done'];
@@ -137,8 +151,10 @@ export default function SchoolDashboard() {
   const [classId, setClassId] = useState('');
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [referenceKindFilter, setReferenceKindFilter] = useState('All');
   const [layout, setLayout] = useState<'list' | 'board'>('list');
   const [editor, setEditor] = useState<Editor | null>(null);
+  const [referenceManagerOpen, setReferenceManagerOpen] = useState(false);
   const [confirm, setConfirm] = useState<{
     mutation: Mutation;
     title: string;
@@ -200,6 +216,7 @@ export default function SchoolDashboard() {
     setView(next);
     setClassId(id);
     setStatusFilter('All');
+    setReferenceKindFilter('All');
     setSelectedDay('');
     setQuery('');
   };
@@ -295,6 +312,48 @@ export default function SchoolDashboard() {
     () => summarizeAssignments(assignments),
     [assignments],
   );
+  const allReferences = useMemo<ReferenceEntry[]>(
+    () => [
+      ...data.classes.flatMap((course) =>
+        (course.references ?? []).map((reference) => ({
+          reference,
+          ownerKind: 'classes' as const,
+          ownerId: course.id,
+          ownerClassId: course.id,
+          ownerName: course.name,
+        })),
+      ),
+      ...data.notes.flatMap((note) =>
+        (note.references ?? []).map((reference) => ({
+          reference,
+          ownerKind: 'notes' as const,
+          ownerId: note.id,
+          ownerClassId: note.classId,
+          ownerName: note.title,
+        })),
+      ),
+    ],
+    [data.classes, data.notes],
+  );
+  const references = useMemo(
+    () =>
+      allReferences.filter(
+        ({ reference, ownerClassId, ownerName }) =>
+          (!classId ||
+            (classId === '__general'
+              ? ownerClassId === ''
+              : ownerClassId === classId)) &&
+          (referenceKindFilter === 'All' ||
+            reference.kind === referenceKindFilter) &&
+          (!search ||
+            [
+              reference.title,
+              ownerName,
+              ...(reference.kind === 'url' ? [reference.href] : []),
+            ].some((value) => value.toLowerCase().includes(search))),
+      ),
+    [allReferences, classId, referenceKindFilter, search],
+  );
   const completed = totals.byStatus.Done.length;
   const progress = data.assignments.length
     ? Math.round((completed / data.assignments.length) * 100)
@@ -363,8 +422,52 @@ export default function SchoolDashboard() {
       : view === 'Notes'
         ? 'notes'
         : 'assignments';
+  const isReferenceView = view === 'References';
   const kindLabel = (kind: Editor['kind']) =>
     kind === 'classes' ? 'class' : kind === 'notes' ? 'note' : 'assignment';
+  const removeReference = (entry: ReferenceEntry) => {
+    const owner =
+      entry.ownerKind === 'classes'
+        ? courseIndex.get(entry.ownerId)
+        : data.notes.find((note) => note.id === entry.ownerId);
+    if (!owner) return;
+    act(
+      {
+        action: 'save',
+        kind: entry.ownerKind,
+        record: {
+          ...owner,
+          references: (owner.references ?? []).filter(
+            (reference) => reference.id !== entry.reference.id,
+          ),
+        },
+      },
+      'Reference removed',
+    );
+  };
+  const addReferencesToOwner = async (
+    ownerKind: 'classes' | 'notes',
+    ownerId: string,
+    added: Reference[],
+  ) => {
+    const owner =
+      ownerKind === 'classes'
+        ? courseIndex.get(ownerId)
+        : data.notes.find((note) => note.id === ownerId);
+    if (!owner) throw new Error('Choose an existing class or note.');
+    await mutate(
+      {
+        action: 'save',
+        kind: ownerKind,
+        record: {
+          ...owner,
+          references: [...(owner.references ?? []), ...added],
+        },
+      },
+      'References added',
+    );
+    setReferenceManagerOpen(false);
+  };
   const removeExamples = () =>
     setConfirm({
       mutation: { action: 'clearExamples' },
@@ -575,6 +678,9 @@ export default function SchoolDashboard() {
                   {data.assignments.length - completed}
                 </span>
               )}
+              {label === 'References' && allReferences.length > 0 && (
+                <span className="nav-count">{allReferences.length}</span>
+              )}
             </button>
           ))}
         </nav>
@@ -655,13 +761,19 @@ export default function SchoolDashboard() {
               )}
             </div>
             <Button
-              aria-label={`New ${kindLabel(primaryKind)}`}
+              aria-label={`New ${isReferenceView ? 'reference' : kindLabel(primaryKind)}`}
               disabled={!loaded || busy}
               className="primary-button"
-              onClick={() => openEditor(primaryKind)}
+              onClick={() =>
+                isReferenceView
+                  ? setReferenceManagerOpen(true)
+                  : openEditor(primaryKind)
+              }
             >
               <Plus size={17} />
-              <span>New {kindLabel(primaryKind)}</span>
+              <span>
+                New {isReferenceView ? 'reference' : kindLabel(primaryKind)}
+              </span>
             </Button>
           </div>
           <div className="date-line">
@@ -933,6 +1045,7 @@ export default function SchoolDashboard() {
           )}
           {(view === 'Assignments' ||
             view === 'Notes' ||
+            view === 'References' ||
             view === 'Calendar') && (
             <div className="view-toolbar">
               <div className="filter-group">
@@ -947,6 +1060,9 @@ export default function SchoolDashboard() {
                       {c.name}
                     </option>
                   ))}
+                  {view === 'References' && (
+                    <option value="__general">General / no class</option>
+                  )}
                 </select>
                 {view === 'Assignments' && (
                   <select
@@ -961,9 +1077,30 @@ export default function SchoolDashboard() {
                     <option>Overdue</option>
                   </select>
                 )}
+                {view === 'References' && (
+                  <select
+                    aria-label="Filter by reference type"
+                    value={referenceKindFilter}
+                    onChange={(e) => setReferenceKindFilter(e.target.value)}
+                  >
+                    <option>All</option>
+                    <option value="url">Links</option>
+                    <option value="image">Images</option>
+                    <option value="pdf">PDFs</option>
+                    <option value="file">Files</option>
+                  </select>
+                )}
                 <span className="secondary-text">
-                  {view === 'Notes' ? notes.length : assignments.length}{' '}
-                  {view === 'Notes' ? 'notes' : 'assignments'}
+                  {view === 'Notes'
+                    ? notes.length
+                    : view === 'References'
+                      ? references.length
+                      : assignments.length}{' '}
+                  {view === 'Notes'
+                    ? 'notes'
+                    : view === 'References'
+                      ? 'references'
+                      : 'assignments'}
                 </span>
               </div>
               {view === 'Assignments' && (
@@ -1094,6 +1231,55 @@ export default function SchoolDashboard() {
               </div>
             ))}
           {view === 'Notes' && noteCards(notes)}
+          {view === 'References' && (
+            <section className="panel references-manager-panel">
+              <div className="references-manager-heading">
+                <div>
+                  <h2>
+                    All references{' '}
+                    <span className="number-tag">{references.length}</span>
+                  </h2>
+                  <p>
+                    Keep links, files, images, and PDFs close to the class or
+                    note they support.
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  disabled={!loaded || busy}
+                  onClick={() => setReferenceManagerOpen(true)}
+                >
+                  <Plus size={16} /> Add reference
+                </Button>
+              </div>
+              {references.length ? (
+                <PagedItems items={references} label="references">
+                  {(visible) => (
+                    <div className="reference-manager-grid">
+                      {visible.map((entry) => (
+                        <ReferencePreview
+                          key={`${entry.ownerKind}-${entry.ownerId}-${entry.reference.id}`}
+                          reference={entry.reference}
+                          context={`${entry.ownerKind === 'classes' ? 'Class' : 'Note'} · ${entry.ownerName}`}
+                          onRemove={() => removeReference(entry)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </PagedItems>
+              ) : (
+                <Empty
+                  icon={Paperclip}
+                  title={
+                    search || classId || referenceKindFilter !== 'All'
+                      ? 'No matching references'
+                      : 'No references yet'
+                  }
+                  text="Add a reference here, or attach one while editing a class or note."
+                />
+              )}
+            </section>
+          )}
           {view === 'Calendar' && (
             <section className="panel calendar-panel">
               <div className="calendar-heading">
@@ -1370,6 +1556,28 @@ export default function SchoolDashboard() {
         </DialogContent>
       </Dialog>
       <Dialog
+        open={referenceManagerOpen}
+        onOpenChange={(open) => {
+          if (!open && !busy) setReferenceManagerOpen(false);
+        }}
+      >
+        <DialogContent className="school-dialog reference-manager-dialog">
+          <DialogTitle>Add a reference</DialogTitle>
+          <DialogDescription>
+            Choose the class or note that should own this reference.
+          </DialogDescription>
+          <ReferenceManagerForm
+            classes={data.classes}
+            notes={data.notes}
+            open={referenceManagerOpen}
+            busy={busy}
+            error={error}
+            onCancel={() => setReferenceManagerOpen(false)}
+            onSave={addReferencesToOwner}
+          />
+        </DialogContent>
+      </Dialog>
+      <Dialog
         open={!!confirm}
         onOpenChange={(open) => {
           if (!open && !busy) setConfirm(null);
@@ -1546,9 +1754,11 @@ function ReferencePreviewList({
 
 function ReferencePreview({
   reference,
+  context,
   onRemove,
 }: {
   reference: Reference;
+  context?: string;
   onRemove?: (id: string) => void;
 }) {
   const label =
@@ -1583,7 +1793,10 @@ function ReferencePreview({
       {localPreview}
       <div className="reference-card-body">
         <strong title={reference.title}>{reference.title}</strong>
-        <small>{label}</small>
+        <small>
+          {context ? `${context} · ` : ''}
+          {label}
+        </small>
         {reference.description && <p>{reference.description}</p>}
       </div>
       <div className="reference-card-actions">
@@ -1755,6 +1968,100 @@ function ReferenceEditor({
       </label>
       {fileError && <p className="form-error">{fileError}</p>}
     </div>
+  );
+}
+
+function ReferenceManagerForm({
+  classes,
+  notes,
+  open,
+  busy,
+  error,
+  onSave,
+  onCancel,
+}: {
+  classes: Course[];
+  notes: Note[];
+  open: boolean;
+  busy: boolean;
+  error: string;
+  onSave: (
+    ownerKind: 'classes' | 'notes',
+    ownerId: string,
+    references: Reference[],
+  ) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const firstTarget = classes[0]
+    ? `classes:${classes[0].id}`
+    : notes[0]
+      ? `notes:${notes[0].id}`
+      : '';
+  const [target, setTarget] = useState(firstTarget);
+  const [references, setReferences] = useState<Reference[]>([]);
+  const [formError, setFormError] = useState('');
+  useEffect(() => {
+    if (!open) return;
+    setTarget(firstTarget);
+    setReferences([]);
+    setFormError('');
+  }, [open, firstTarget]);
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const separator = target.indexOf(':');
+    const ownerKind = target.slice(0, separator) as 'classes' | 'notes';
+    const ownerId = target.slice(separator + 1);
+    if (separator < 0 || !ownerId || !references.length) {
+      setFormError('Add at least one reference and choose where it belongs.');
+      return;
+    }
+    setFormError('');
+    void onSave(ownerKind, ownerId, references).catch(() => {});
+  };
+  return (
+    <form className="editor-form" onSubmit={submit}>
+      <label>
+        Attach to
+        <select
+          value={target}
+          onChange={(event) => setTarget(event.target.value)}
+        >
+          {classes.map((course) => (
+            <option key={`classes:${course.id}`} value={`classes:${course.id}`}>
+              Class · {course.name}
+            </option>
+          ))}
+          {notes.map((note) => (
+            <option key={`notes:${note.id}`} value={`notes:${note.id}`}>
+              Note · {note.title}
+            </option>
+          ))}
+        </select>
+      </label>
+      <ReferenceEditor references={references} onChange={setReferences} />
+      {(formError || error) && (
+        <p role="alert" className="form-error">
+          {formError || error}
+        </p>
+      )}
+      <div className="form-actions">
+        <Button
+          type="button"
+          variant="outline"
+          disabled={busy}
+          onClick={onCancel}
+        >
+          Cancel
+        </Button>
+        <Button
+          className="primary-button"
+          type="submit"
+          disabled={busy || !target}
+        >
+          {busy ? 'Saving…' : 'Save reference'}
+        </Button>
+      </div>
+    </form>
   );
 }
 
